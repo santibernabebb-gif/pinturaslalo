@@ -86,48 +86,41 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4) BORRADO FIABLE DEL BLOQUE "IMPORTANTE" (SIN CROPBOX)
-  // CropBox puede ser ignorado por algunos visores/impresión. Para que SIEMPRE desaparezca,
-  // tapamos visualmente con un rectángulo blanco dibujado AL FINAL.
+  // 4) BORRADO FIABLE DEL PIE (SIN CROPBOX)
+  // Motivo: algunos visores/impresoras ignoran CropBox. Para que SIEMPRE desaparezca “IMPORTANTE”
+  // (y cualquier cosa debajo), tapamos con un rectángulo blanco dibujado AL FINAL.
   //
-  // Reglas:
-  // - Si detectamos "IMPORTANTE", usamos su Y + margen.
-  // - Si NO lo detectamos, usamos un FALLBACK_Y fijo situado por debajo de IVA/TOTAL.
-  // - Nunca tapar IVA/TOTAL: limitamos el tapado por debajo de la marca de IVA.
-  // Fallback pensado para tapar TODO lo inferior sin comerse IVA/TOTAL.
-  // Usamos la marca de IVA (si existe) y bajamos lo suficiente como para quedar por debajo del recuadro.
-  const FALLBACK_Y = (budget.ivaMarkerY !== undefined)
-    ? Math.max(0, budget.ivaMarkerY - 70)
-    : 250; // valor seguro para la plantilla actual (entre IVA y "IMPORTANTE")
+  // Regla:
+  // - yStart debe quedar POR DEBAJO de IVA/TOTAL (para no taparlos)
+  // - yStart debe quedar POR ENCIMA de “IMPORTANTE” (para taparlo)
+  //
+  // Usamos como referencia IVA 21% (está encima de IMPORTANTE en la plantilla).
+  const FALLBACK_Y = 160; // Solo si no detectamos IVA (valor seguro aproximado)
+  const SAFE_GAP_UNDER_IVA = 28; // aire bajo el texto IVA para no tapar cajas
 
-  const yImportantePdfLib = budget.footerMarkerY;
-  // Subimos bastante por encima de "IMPORTANTE" para cubrir también bullets/lineas que puedan quedar más arriba.
-  let yStart = (yImportantePdfLib !== undefined)
-    ? (yImportantePdfLib + 200)
-    : FALLBACK_Y;
+  const ivaY = budget.ivaMarkerY;
+  let yStart = (typeof ivaY === 'number' ? ivaY : FALLBACK_Y) - SAFE_GAP_UNDER_IVA;
 
-  // Protección IVA: el tapado debe quedar SIEMPRE por debajo de IVA
-  if (budget.ivaMarkerY !== undefined) {
-    const SAFE_GAP = 18;
-    const maxYStart = budget.ivaMarkerY - SAFE_GAP;
-    yStart = Math.min(yStart, maxYStart);
+  // Si detectamos IMPORTANTE, aseguramos que el tapado sube lo suficiente.
+  // (normalmente yStart ya será superior, pero por si el IVA no se detecta)
+  if (typeof budget.footerMarkerY === 'number') {
+    const MIN_ABOVE_IMPORTANTE = budget.footerMarkerY + 60;
+    if (yStart < MIN_ABOVE_IMPORTANTE) yStart = MIN_ABOVE_IMPORTANTE;
   }
 
   // Clamp
   yStart = Math.max(0, Math.min(LAYOUT.height, yStart));
 
-  // Tapado final (dibujar lo último)
-  if (yStart > 0) {
-    firstPage.drawRectangle({
-      x: 0,
-      y: 0,
-      width: LAYOUT.width,
-      height: yStart,
-      color: rgb(1, 1, 1),
-      opacity: 1,
-      borderOpacity: 0,
-    });
-  }
+  // Tapado final (DEBE ser lo último que se dibuja)
+  firstPage.drawRectangle({
+    x: 0,
+    y: 0,
+    width: LAYOUT.width,
+    height: yStart,
+    color: rgb(1, 1, 1),
+    opacity: 1,
+    borderOpacity: 0,
+  });
 
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
