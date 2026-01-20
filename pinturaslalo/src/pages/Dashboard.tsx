@@ -130,8 +130,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div style={styles.header}>
-        <div style={styles.welcome}>BIEN VENIDO</div>
-        <h1 style={styles.title}>¡Hola de nuevo!</h1>
+        <div style={styles.welcome}>BIENVENIDO</div>
+        <h1 style={styles.title}>¡Hola Lalo!</h1>
         <p style={styles.subtitle}>¿Qué vamos a gestionar hoy?</p>
       </div>
 
@@ -146,7 +146,7 @@ const Dashboard: React.FC = () => {
             <FileText size={22} />
           </div>
           <p style={styles.cardTitle}>PRESUPUESTOS</p>
-          <p style={styles.cardDesc}>Crea y gestiona tus cotizaciones</p>
+          <p style={styles.cardDesc}>Crea y gestiona tus presupuestos</p>
           <button style={styles.button} onClick={() => navigate('/presupuestos')}>
             Ir a Presupuestos →
           </button>
@@ -162,7 +162,7 @@ const Dashboard: React.FC = () => {
             <Receipt size={22} />
           </div>
           <p style={styles.cardTitle}>FACTURAS</p>
-          <p style={styles.cardDesc}>Control total de tus cobros</p>
+          <p style={styles.cardDesc}>Control total de tus facturas</p>
           <button style={styles.button} onClick={() => navigate('/facturas')}>
             Ir a Facturas →
           </button>
