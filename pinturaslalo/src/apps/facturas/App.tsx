@@ -267,9 +267,9 @@ const App: React.FC = () => {
                       onFocus={() => {
                         // Limpia el valor solo la 1a vez y solo si parece un placeholder numérico/simbólico.
                         // Esto hace que se comporte igual que el campo Nº Factura.
-                        if (!didAutoClear.clientName && looksLikePlaceholderName(selectedBudget.clientName)) {
-                          updateSelectedBudget({ clientName: '' });
-                          setDidAutoClear(prev => ({ ...prev, clientName: true }));
+						if (!didAutoClear.clientName) {
+							updateSelectedBudget({ clientName: '' });
+							setDidAutoClear(prev => ({ ...prev, clientName: true }));
                         }
                       }}
                       onChange={(e) => updateSelectedBudget({ clientName: e.target.value.toUpperCase() })}
