@@ -1,4 +1,3 @@
-
 export interface InvoiceLine {
   description: string;
   units: number;
@@ -24,13 +23,10 @@ export interface BudgetData {
   footerMarkerY?: number; // Coordenada Y de la palabra 'IMPORTANTE'
   ivaMarkerY?: number;    // Coordenada Y del bloque "IVA 21%" (para proteger el recorte)
 
-  // Coordenadas Y de las marcas "PRESUPUESTO" (arriba y abajo) para reemplazar por "FACTURA"
-  presupuestoTopY?: number;
-  presupuestoBottomY?: number;
-
-  // Coordenadas Y de las etiquetas (para colocar texto sin superponer)
-  clienteLabelY?: number;
-  fechaLabelY?: number;
+  // NUEVOS MARCADORES (para que no se rompa según el contenido)
+  totalMarkerY?: number;  // Coordenada Y del texto "TOTAL" (para NO taparlo)
+  clienteBoxY?: number;   // Coordenada Y del bloque/etiqueta de cliente ("PARA EL CLIENTE"/"CLIENTE")
+  tableHeaderY?: number;  // Coordenada Y del encabezado de tabla ("CONCEPTO"/"DESCRIPCIÓN")
 }
 
 export interface InvoiceConfig {
@@ -46,7 +42,7 @@ export const EMISOR_DATA = {
   name: "Eduardo Quilis Llorens",
   nif: "21667776-M",
   address: "C/ Cervantes 41",
-  city: "Onil Â· 03430",
+  city: "Onil · 03430",
   email: "quilislalo@gmail.com",
   phone: "620-944-229"
 };

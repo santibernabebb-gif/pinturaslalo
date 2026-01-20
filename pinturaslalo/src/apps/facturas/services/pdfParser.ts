@@ -1,5 +1,5 @@
 
-import { BudgetData, InvoiceLine } from '../types';
+import { BudgetData } from '../types';
 
 interface PDFTextItem {
   str: string;
@@ -11,12 +11,12 @@ interface PDFTextItem {
 export async function parseBudgetPdf(file: File): Promise<BudgetData> {
   const arrayBuffer = await file.arrayBuffer();
   const bufferForPdfJs = arrayBuffer.slice(0);
-  
+
   // @ts-ignore
   const pdf = await window.pdfjsLib.getDocument({ data: bufferForPdfJs }).promise;
   const page = await pdf.getPage(1);
   const textContent = await page.getTextContent();
-  
+
   const allItems: PDFTextItem[] = textContent.items.map((item: any) => ({
     str: item.str,
     x: item.transform[4],
@@ -24,12 +24,33 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
     width: item.width
   }));
 
+  // Marcadores adicionales para borrar/posicionar zonas de forma estable
+  // - clienteBoxY: etiqueta del bloque de cliente del PDF base (ej. "PARA EL CLIENTE" / "CLIENTE")
+  // - tableHeaderY: encabezado de tabla ("CONCEPTO" / "DESCRIPCI�N")
+  // - totalMarkerY: texto "TOTAL" del bloque de totales (para NO taparlo)
+  let clienteBoxY: number | undefined = undefined;
+  let tableHeaderY: number | undefined = undefined;
+  let totalMarkerY: number | undefined = undefined;
+
+  for (const it of allItems) {
+    const s = (it.str || '').toString().trim().toUpperCase();
+    if (!clienteBoxY && (s.includes('PARA EL CLIENTE') || s === 'CLIENTE:' || s === 'CLIENTE')) {
+      clienteBoxY = it.y;
+    }
+    if (!tableHeaderY && (s.includes('CONCEPTO') || s.includes('DESCRIPCION') || s.includes('DESCRIPCI�N'))) {
+      tableHeaderY = it.y;
+    }
+    if (!totalMarkerY && s === 'TOTAL') {
+      totalMarkerY = it.y;
+    }
+  }
+
   const textLines = allItems.map(i => i.str).join(' ');
   let detectedClient = "CLIENTE DETECTADO";
-  
+
   const lowerText = textLines.toLowerCase();
-  const markers = ["cliente:", "señor/a:", "atn:"];
-  
+  const markers = ["cliente:", "se�or/a:", "atn:"];
+
   for (const marker of markers) {
     const idx = lowerText.indexOf(marker);
     if (idx !== -1) {
@@ -39,28 +60,20 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
     }
   }
 
-  // DETECCIÓN ROBUSTA DE "IMPORTANTE"
-  // 1. Ordenamos items por posición visual: de arriba a abajo (Y desc) y de izquierda a derecha (X asc)
+  // DETECCI�N ROBUSTA DE "IMPORTANTE"
   const sortedItems = [...allItems].sort((a, b) => {
-    // Tolerancia de 2 puntos para considerar que están en la misma línea
     if (Math.abs(a.y - b.y) > 2) return b.y - a.y;
     return a.x - b.x;
   });
 
   let footerMarkerY: number | undefined = undefined;
   let ivaMarkerY: number | undefined = undefined;
-  let presupuestoTopY: number | undefined = undefined;
-  let presupuestoBottomY: number | undefined = undefined;
-  let clienteLabelY: number | undefined = undefined;
-  let fechaLabelY: number | undefined = undefined;
   let currentRunText = "";
   let currentRunY = -1;
   let lastXEnd = -1;
 
-  // 2. Agrupamos items en "runs" (cadenas de texto lógicas) basados en proximidad para manejar textos partidos
   for (const item of sortedItems) {
     const isSameLine = currentRunY === -1 || Math.abs(item.y - currentRunY) < 2;
-    // Tolerancia de 5 puntos para considerar que los items son parte de la misma palabra/bloque
     const isCloseX = lastXEnd === -1 || (item.x - lastXEnd) < 5;
 
     if (isSameLine && isCloseX) {
@@ -68,47 +81,29 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
       lastXEnd = item.x + item.width;
       if (currentRunY === -1) currentRunY = item.y;
     } else {
-      // Procesar el run completado antes de iniciar el siguiente
       if (currentRunText) {
         const normalized = currentRunText.trim()
-          .replace(/\u00A0/g, ' ')      // Normalizar Espacios No Rompibles (NBSP)
-          .replace(/\s+/g, ' ')         // Eliminar espacios duplicados
+          .replace(/\u00A0/g, ' ')
+          .replace(/\s+/g, ' ')
           .toUpperCase()
-          .replace(/[^A-Z0-9]+$/, '');  // Eliminar caracteres no alfanuméricos finales (como el ':')
+          .replace(/[^A-Z0-9]+$/, '');
 
-        // Guardar la posición de IVA 21% (si aparece) para proteger el recorte.
         if (ivaMarkerY === undefined && normalized.includes("IVA") && normalized.includes("21")) {
           ivaMarkerY = currentRunY;
         }
 
-        // Guardar posiciones de "PRESUPUESTO" (arriba y abajo) para reemplazo por "FACTURA"
-        if (normalized === "PRESUPUESTO") {
-          if (presupuestoTopY === undefined || currentRunY > presupuestoTopY) presupuestoTopY = currentRunY;
-          if (presupuestoBottomY === undefined || currentRunY < presupuestoBottomY) presupuestoBottomY = currentRunY;
-        }
-
-        // Coordenadas de etiquetas (para colocar texto sin superponer)
-        if (clienteLabelY === undefined && normalized === "CLIENTE") {
-          clienteLabelY = currentRunY;
-        }
-        if (fechaLabelY === undefined && normalized === "FECHA") {
-          fechaLabelY = currentRunY;
-        }
-
         if (normalized.includes("IMPORTANTE")) {
           footerMarkerY = currentRunY;
-          break; // Detener búsqueda al encontrar la marca
+          break;
         }
       }
 
-      // Reiniciar para el siguiente item/run
       currentRunText = item.str;
       currentRunY = item.y;
       lastXEnd = item.x + item.width;
     }
   }
 
-  // Comprobación final por si el match estaba en el último run procesado
   if (footerMarkerY === undefined && currentRunText) {
     const normalized = currentRunText.trim()
       .replace(/\u00A0/g, ' ')
@@ -118,18 +113,6 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
 
     if (ivaMarkerY === undefined && normalized.includes("IVA") && normalized.includes("21")) {
       ivaMarkerY = currentRunY;
-    }
-
-    if (normalized === "PRESUPUESTO") {
-      if (presupuestoTopY === undefined || currentRunY > presupuestoTopY) presupuestoTopY = currentRunY;
-      if (presupuestoBottomY === undefined || currentRunY < presupuestoBottomY) presupuestoBottomY = currentRunY;
-    }
-
-    if (clienteLabelY === undefined && normalized === "CLIENTE") {
-      clienteLabelY = currentRunY;
-    }
-    if (fechaLabelY === undefined && normalized === "FECHA") {
-      fechaLabelY = currentRunY;
     }
 
     if (normalized.includes("IMPORTANTE")) {
@@ -149,9 +132,8 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
     originalBuffer: arrayBuffer,
     footerMarkerY,
     ivaMarkerY,
-    presupuestoTopY,
-    presupuestoBottomY,
-    clienteLabelY,
-    fechaLabelY
+    totalMarkerY,
+    clienteBoxY,
+    tableHeaderY
   };
 }
