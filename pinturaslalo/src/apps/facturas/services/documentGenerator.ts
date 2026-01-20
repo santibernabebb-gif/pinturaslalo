@@ -89,25 +89,28 @@ export async function generatePdf(
   // 4. SOLUCIÓN OBLIGATORIA (RECORTE / CROP):
   // Eliminamos visualmente todo desde la marca 'IMPORTANTE' hacia abajo mediante CropBox.
   const DEBUG_CROP = false;
-  if (budget.footerMarkerY !== undefined) {
-    // Margen pequeño: el corte debe quedar ENTRE el bloque de totales (arriba) y "IMPORTANTE" (abajo).
-    // Si el margen es grande, puede comerse IVA/TOTAL; si es muy pequeño, deja poco aire.
-    const EXTRA_BOTTOM_MARGIN = 18;
+  {
+    // Queremos que NO se vea ni "IMPORTANTE" ni nada del pie (incluido el texto grande "PRESUPUESTO" que a veces queda abajo).
+    // Por eso damos algo más de margen y, si no detectamos "IMPORTANTE", aplicamos un recorte por defecto.
+    const EXTRA_BOTTOM_MARGIN = 42;
+    const DEFAULT_CUT_FROM_BOTTOM = 180; // fallback: recorta ~21% inferior de A4
 
     const yImportantePdfLib = budget.footerMarkerY;
-    let yCut = yImportantePdfLib + EXTRA_BOTTOM_MARGIN;
+    let yCut = (yImportantePdfLib !== undefined)
+      ? (yImportantePdfLib + EXTRA_BOTTOM_MARGIN)
+      : DEFAULT_CUT_FROM_BOTTOM;
 
     // Protección: nunca cortar por encima del texto "IVA 21%" (si lo detectamos).
     // El CropBox muestra desde yCut hacia arriba; si yCut >= ivaY, el bloque de IVA/TOTAL desaparece.
     if (budget.ivaMarkerY !== undefined) {
       const ivaY = budget.ivaMarkerY;
-      const SAFE_GAP = 14;
+      const SAFE_GAP = 22;
       const maxAllowedCut = ivaY - SAFE_GAP;
       if (yCut >= maxAllowedCut) {
         // Preferimos preservar IVA/TOTAL: el corte NUNCA debe subir por encima del bloque de IVA.
         yCut = Math.min(yCut, maxAllowedCut);
-        // Asegurar que seguimos tapando "IMPORTANTE" (mínimo 2pt por encima de su Y)
-        if (yCut <= yImportantePdfLib + 2) yCut = yImportantePdfLib + 2;
+        // Asegurar que seguimos tapando "IMPORTANTE" si existe (mínimo 2pt por encima de su Y)
+        if (yImportantePdfLib !== undefined && yCut <= yImportantePdfLib + 2) yCut = yImportantePdfLib + 2;
         // Si aun así nos pasamos, forzamos a quedar justo por debajo del límite seguro.
         if (yCut >= maxAllowedCut) yCut = maxAllowedCut - 1;
       }
@@ -134,9 +137,6 @@ export async function generatePdf(
         color: rgb(1, 0, 0),
       });
     }
-  } else {
-    // FALLO CONTROLADO: No se detectó la palabra, no se aplica recorte agresivo.
-    console.warn("Palabra 'IMPORTANTE' no detectada. No se aplicará el recorte dinámico del pie de página.");
   }
 
   const pdfBytes = await pdfDoc.save();

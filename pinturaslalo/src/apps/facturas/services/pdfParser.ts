@@ -107,6 +107,30 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
     }
   }
 
+  // Fallback extra (muy importante): algunos PDFs devuelven "IMPORTANTE" como item suelto
+  // o con separaciones raras que no entran bien en la lógica de "runs".
+  // Si no lo hemos detectado, buscamos de forma directa en los items.
+  if (footerMarkerY === undefined) {
+    for (const it of allItems) {
+      const s = (it.str || '').toString().toUpperCase();
+      if (s.includes('IMPORTANTE')) {
+        footerMarkerY = it.y;
+        break;
+      }
+    }
+  }
+
+  // Fallback IVA 21% directo (para proteger el recorte en generatePdf)
+  if (ivaMarkerY === undefined) {
+    for (const it of allItems) {
+      const s = (it.str || '').toString().toUpperCase();
+      if (s.includes('IVA') && s.includes('21')) {
+        ivaMarkerY = it.y;
+        break;
+      }
+    }
+  }
+
   return {
     id: Math.random().toString(36).substr(2, 9),
     fileName: file.name,
