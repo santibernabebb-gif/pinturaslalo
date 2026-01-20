@@ -40,6 +40,12 @@ const App: React.FC = () => {
     date: new Date().toISOString().split('T')[0]
   });
 
+  // Para que al pulsar en los campos no tenga que borrar un número que viene por defecto.
+  // Solo se limpia la primera vez, y solo si el valor actual es numérico (p. ej. "1").
+  const [didAutoClear, setDidAutoClear] = useState({ clientName: false, invoiceNumber: false });
+
+  const looksNumeric = (value: string) => /^\s*\d+\s*$/.test(value);
+
   const handleBudgetsDetected = (newBudgets: BudgetData[]) => {
     setBudgets(prev => [...newBudgets, ...prev]);
     if (newBudgets.length > 0) {
@@ -230,12 +236,34 @@ const App: React.FC = () => {
               <div className="bg-slate-50 p-5 rounded-[28px] border border-slate-100 space-y-4">
                  <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre Cliente</label>
-                    <input type="text" value={selectedBudget.clientName} onChange={(e) => updateSelectedBudget({ clientName: e.target.value.toUpperCase() })} className="w-full mt-1 p-3 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none" />
+                    <input
+                      type="text"
+                      value={selectedBudget.clientName}
+                      onFocus={() => {
+                        if (!didAutoClear.clientName && looksNumeric(selectedBudget.clientName)) {
+                          updateSelectedBudget({ clientName: '' });
+                          setDidAutoClear(prev => ({ ...prev, clientName: true }));
+                        }
+                      }}
+                      onChange={(e) => updateSelectedBudget({ clientName: e.target.value.toUpperCase() })}
+                      className="w-full mt-1 p-3 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none"
+                    />
                  </div>
                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nº Factura</label>
-                      <input type="number" value={invoiceConfig.number} onChange={(e) => setInvoiceConfig({...invoiceConfig, number: e.target.value})} className="w-full mt-1 p-3 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none" />
+                      <input
+                        type="number"
+                        value={invoiceConfig.number}
+                        onFocus={() => {
+                          if (!didAutoClear.invoiceNumber && looksNumeric(invoiceConfig.number)) {
+                            setInvoiceConfig(prev => ({ ...prev, number: '' }));
+                            setDidAutoClear(prev => ({ ...prev, invoiceNumber: true }));
+                          }
+                        }}
+                        onChange={(e) => setInvoiceConfig({ ...invoiceConfig, number: e.target.value })}
+                        className="w-full mt-1 p-3 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none"
+                      />
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha Factura</label>
