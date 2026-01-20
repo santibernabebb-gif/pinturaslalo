@@ -86,47 +86,48 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4) ELIMINAR SIEMPRE TODO DESDE "IMPORTANTE" HACIA ABAJO (SIN CROPBOX)
-  // CropBox puede no aplicarse en algunos visores/impresión; por eso TAPAMOS visualmente el pie.
-  // Reglas (como en tu prompt):
-  //  - Si detectamos Y de "IMPORTANTE": yStart = yImportante + 40
-  //  - Si NO detectamos: yStart = FALLBACK_Y (constante)
-  //  - Dibujar rectángulo blanco opaco desde y=0 hasta yStart
-  //  - IMPORTANTÍSIMO: este rectángulo se dibuja EL ÚLTIMO.
+  // 4) BORRADO FIABLE DEL BLOQUE "IMPORTANTE" (SIN CROPBOX)
+  // CropBox puede ser ignorado por algunos visores/impresión. Para que SIEMPRE desaparezca,
+  // tapamos visualmente con un rectángulo blanco dibujado AL FINAL.
+  //
+  // Reglas:
+  // - Si detectamos "IMPORTANTE", usamos su Y + margen.
+  // - Si NO lo detectamos, usamos un FALLBACK_Y fijo situado por debajo de IVA/TOTAL.
+  // - Nunca tapar IVA/TOTAL: limitamos el tapado por debajo de la marca de IVA.
+  // Fallback pensado para tapar TODO lo inferior sin comerse IVA/TOTAL.
+  // Usamos la marca de IVA (si existe) y bajamos lo suficiente como para quedar por debajo del recuadro.
+  const FALLBACK_Y = (budget.ivaMarkerY !== undefined)
+    ? Math.max(0, budget.ivaMarkerY - 70)
+    : 250; // valor seguro para la plantilla actual (entre IVA y "IMPORTANTE")
 
-  // Ajusta este número si tu plantilla cambia. Debe quedar:
-  //  - POR DEBAJO del bloque IVA/TOTAL
-  //  - POR ENCIMA de donde empieza "IMPORTANTE"
-  const FALLBACK_Y = 250;
-
-  let yStart: number;
   const yImportantePdfLib = budget.footerMarkerY;
-  if (yImportantePdfLib !== undefined && yImportantePdfLib !== null) {
-    yStart = yImportantePdfLib + 40;
-  } else {
-    yStart = FALLBACK_Y;
-  }
+  // Subimos bastante por encima de "IMPORTANTE" para cubrir también bullets/lineas que puedan quedar más arriba.
+  let yStart = (yImportantePdfLib !== undefined)
+    ? (yImportantePdfLib + 200)
+    : FALLBACK_Y;
 
-  // Protección extra: si tenemos marker de IVA, aseguramos que NO tapamos el bloque IVA/TOTAL.
-  if (budget.ivaMarkerY !== undefined && budget.ivaMarkerY !== null) {
-    const SAFE_GAP = 28; // deja margen en blanco bajo los totales
+  // Protección IVA: el tapado debe quedar SIEMPRE por debajo de IVA
+  if (budget.ivaMarkerY !== undefined) {
+    const SAFE_GAP = 18;
     const maxYStart = budget.ivaMarkerY - SAFE_GAP;
-    if (yStart >= maxYStart) yStart = maxYStart;
+    yStart = Math.min(yStart, maxYStart);
   }
 
-  // Clamp al rango visible de página
+  // Clamp
   yStart = Math.max(0, Math.min(LAYOUT.height, yStart));
 
-  // Tapado FINAL (último draw)
-  firstPage.drawRectangle({
-    x: 0,
-    y: 0,
-    width: LAYOUT.width,
-    height: yStart,
-    color: rgb(1, 1, 1),
-    opacity: 1,
-    borderOpacity: 0,
-  });
+  // Tapado final (dibujar lo último)
+  if (yStart > 0) {
+    firstPage.drawRectangle({
+      x: 0,
+      y: 0,
+      width: LAYOUT.width,
+      height: yStart,
+      color: rgb(1, 1, 1),
+      opacity: 1,
+      borderOpacity: 0,
+    });
+  }
 
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
