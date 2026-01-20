@@ -8,10 +8,8 @@ const LAYOUT = {
 
 const OVERLAY = {
   covers: [
-    // NO tocamos la zona superior (logo/nombre). Solo limpiamos el título "PRESUPUESTO" del PDF base
-    // y el recuadro de datos del cliente.
-    { name: "presupuesto_title_wipe", x: 0, y: 670, w: 595, h: 85 },
-    { name: "info_wipe",  x: 40,  y: 615, w: 515, h: 50 },
+    { name: "top_header_cleaner", x: 0, y: 790, w: 595, h: 52 }, 
+    { name: "info_wipe",  x: 40,  y: 615, w: 515, h: 50 },  
   ],
   texts: {
     titulo: { y: 802, size: 38, label: "FACTURA" },
@@ -88,25 +86,32 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4. ELIMINAR SIEMPRE EL BLOQUE "IMPORTANTE" (SIN CROPBOX)
-  // CropBox puede fallar según visor/impresora. Para que sea 100% fiable, tapamos al final con un rectángulo blanco.
-  // Regla: tapar desde yStart hacia abajo, dejando siempre visibles IVA/TOTAL.
-  const SAFE_GAP_UNDER_IVA = 28; // margen en blanco bajo IVA/TOTAL
-  const FALLBACK_Y = 160;        // si no detectamos IVA, tapamos a un punto seguro inferior
+  // 4) BORRADO FIABLE DEL PIE (SIN CROPBOX)
+  // Motivo: algunos visores/impresoras ignoran CropBox. Para que SIEMPRE desaparezca “IMPORTANTE”
+  // (y cualquier cosa debajo), tapamos con un rectángulo blanco dibujado AL FINAL.
+  //
+  // Regla:
+  // - yStart debe quedar POR DEBAJO de IVA/TOTAL (para no taparlos)
+  // - yStart debe quedar POR ENCIMA de “IMPORTANTE” (para taparlo)
+  //
+  // Usamos como referencia IVA 21% (está encima de IMPORTANTE en la plantilla).
+  const FALLBACK_Y = 160; // Solo si no detectamos IVA (valor seguro aproximado)
+  const SAFE_GAP_UNDER_IVA = 28; // aire bajo el texto IVA para no tapar cajas
 
-  let yStart = FALLBACK_Y;
-  if (budget.ivaMarkerY !== undefined) {
-    yStart = budget.ivaMarkerY - SAFE_GAP_UNDER_IVA;
-  }
-  if (budget.footerMarkerY !== undefined) {
-    // Asegurar que "IMPORTANTE" siempre queda dentro de la zona tapada.
-    yStart = Math.max(yStart, budget.footerMarkerY + 40);
+  const ivaY = budget.ivaMarkerY;
+  let yStart = (typeof ivaY === 'number' ? ivaY : FALLBACK_Y) - SAFE_GAP_UNDER_IVA;
+
+  // Si detectamos IMPORTANTE, aseguramos que el tapado sube lo suficiente.
+  // (normalmente yStart ya será superior, pero por si el IVA no se detecta)
+  if (typeof budget.footerMarkerY === 'number') {
+    const MIN_ABOVE_IMPORTANTE = budget.footerMarkerY + 60;
+    if (yStart < MIN_ABOVE_IMPORTANTE) yStart = MIN_ABOVE_IMPORTANTE;
   }
 
-  // Clamp a página
+  // Clamp
   yStart = Math.max(0, Math.min(LAYOUT.height, yStart));
 
-  // IMPORTANTÍSIMO: dibujar lo último para que borre cualquier texto que hubiera debajo.
+  // Tapado final (DEBE ser lo último que se dibuja)
   firstPage.drawRectangle({
     x: 0,
     y: 0,
@@ -114,6 +119,7 @@ export async function generatePdf(
     height: yStart,
     color: rgb(1, 1, 1),
     opacity: 1,
+    borderOpacity: 0,
   });
 
   const pdfBytes = await pdfDoc.save();
