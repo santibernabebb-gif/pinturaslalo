@@ -15,7 +15,7 @@ import {
   ArrowLeft,
   Home
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FileUploader } from './components/FileUploader';
 import { BudgetList } from './components/BudgetList';
 import { BudgetData, MONTHS_ABREV_ES } from './types';
@@ -45,6 +45,32 @@ const App: React.FC = () => {
   const [didAutoClear, setDidAutoClear] = useState({ clientName: false, invoiceNumber: false });
 
   const looksNumeric = (value: string) => /^\s*\d+\s*$/.test(value);
+
+  // Persistir historial de carga (FACTURAS) aunque vuelvas atrás o recargues la página
+  const HISTORY_STORAGE_KEY = 'lalo_facturas_history_v1';
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setBudgets(parsed as BudgetData[]);
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo cargar el historial de facturas:', e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(budgets));
+    } catch (e) {
+      console.warn('No se pudo guardar el historial de facturas:', e);
+    }
+  }, [budgets]);
 
   const handleBudgetsDetected = (newBudgets: BudgetData[]) => {
     setBudgets(prev => [...newBudgets, ...prev]);
@@ -144,6 +170,17 @@ const App: React.FC = () => {
     setLastBlobUrl(null);
   };
 
+  const handleClearHistory = () => {
+    if (budgets.length === 0) return;
+    if (!confirm('¿Borrar todo el historial de facturas?')) return;
+    setBudgets([]);
+    try {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  };
+
   const updateSelectedBudget = (updates: Partial<BudgetData>) => {
     if (selectedBudget) setSelectedBudget({ ...selectedBudget, ...updates });
   };
@@ -206,8 +243,22 @@ const App: React.FC = () => {
                     onError={setError}
                   />
                   <div className="pt-2">
-                    <h3 className="font-black text-slate-800 text-[16px] mb-4">Historial de Carga</h3>
-                    <BudgetList budgets={budgets} onSelect={setSelectedBudget} onDelete={(id) => setBudgets(b => b.filter(x => x.id !== id))} />
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-black text-slate-800 text-[16px]">Historial de Carga</h3>
+                      <button
+                        type="button"
+                        onClick={handleClearHistory}
+                        className="px-3 py-2 rounded-2xl border border-slate-100 bg-white hover:bg-red-50 hover:border-red-100 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-red-600 active:scale-95 transition-all"
+                        title="Borrar todo"
+                      >
+                        Borrar todo
+                      </button>
+                    </div>
+                    <BudgetList
+                      budgets={budgets}
+                      onSelect={setSelectedBudget}
+                      onDelete={(id) => setBudgets(b => b.filter(x => x.id !== id))}
+                    />
                   </div>
                 </>
               ) : (
