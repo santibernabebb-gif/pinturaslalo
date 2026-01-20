@@ -240,9 +240,9 @@ const App: React.FC = () => {
                       type="text"
                       value={selectedBudget.clientName}
                       onFocus={() => {
-                       if (!didAutoClear.clientName) {
-							updateSelectedBudget({ clientName: '' });
-							setDidAutoClear(prev => ({ ...prev, clientName: true }));
+                        if (!didAutoClear.clientName && looksNumeric(selectedBudget.clientName)) {
+                          updateSelectedBudget({ clientName: '' });
+                          setDidAutoClear(prev => ({ ...prev, clientName: true }));
                         }
                       }}
                       onChange={(e) => updateSelectedBudget({ clientName: e.target.value.toUpperCase() })}
