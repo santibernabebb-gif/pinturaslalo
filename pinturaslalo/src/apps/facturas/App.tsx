@@ -15,7 +15,7 @@ import {
   ArrowLeft,
   Home
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FileUploader } from './components/FileUploader';
 import { BudgetList } from './components/BudgetList';
 import { BudgetData, MONTHS_ABREV_ES } from './types';
@@ -44,7 +44,32 @@ const App: React.FC = () => {
   // Solo se limpia la primera vez, y solo si el valor actual es numérico (p. ej. "1").
   const [didAutoClear, setDidAutoClear] = useState({ clientName: false, invoiceNumber: false });
 
+  // Si el usuario cambia de archivo o vuelve a la pantalla "Revisar Datos",
+  // reactivamos el autoclear para que los campos se limpien correctamente.
+  useEffect(() => {
+    if (currentStep === Step.SETUP) {
+      setDidAutoClear({ clientName: false, invoiceNumber: false });
+    }
+  }, [currentStep, selectedBudget?.id]);
+
   const looksNumeric = (value: string) => /^\s*\d+\s*$/.test(value);
+  // Para el nombre del cliente, a veces llega un "placeholder" con números o símbolos (p. ej. "1", "13-", "1/")
+  // que no son un nombre real. Si NO hay letras y SÍ hay algún dígito, lo consideramos basura y lo limpiamos.
+  const looksLikePlaceholderName = (value: string) => {
+    const v = (value ?? '').toString().trim();
+    if (!v) return false;
+
+    const letters = v.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g)?.length ?? 0;
+    const hasDigits = /\d/.test(v);
+
+    // Heurística:
+    // - Si solo hay números/símbolos -> placeholder
+    // - Si hay dígitos pero casi no hay letras (p. ej. "1", "13-", "CL1") -> placeholder
+    if (hasDigits && letters === 0) return true;
+    if (hasDigits && letters > 0 && letters < 3) return true;
+
+    return false;
+  };
 
   const handleBudgetsDetected = (newBudgets: BudgetData[]) => {
     setBudgets(prev => [...newBudgets, ...prev]);
@@ -240,7 +265,9 @@ const App: React.FC = () => {
                       type="text"
                       value={selectedBudget.clientName}
                       onFocus={() => {
-                        if (!didAutoClear.clientName && looksNumeric(selectedBudget.clientName)) {
+                        // Limpia el valor solo la 1a vez y solo si parece un placeholder numérico/simbólico.
+                        // Esto hace que se comporte igual que el campo Nº Factura.
+                        if (!didAutoClear.clientName && looksLikePlaceholderName(selectedBudget.clientName)) {
                           updateSelectedBudget({ clientName: '' });
                           setDidAutoClear(prev => ({ ...prev, clientName: true }));
                         }
