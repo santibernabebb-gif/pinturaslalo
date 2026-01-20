@@ -29,6 +29,12 @@ const LATERAL_CODE = {
 const SAFE_GAP_UNDER_IVA = 28; // aire por debajo del bloque IVA/TOTAL antes de empezar a tapar
 const FALLBACK_Y = 160; // si no detectamos IVA, tapamos desde aquí hacia abajo
 
+// Banda central (debajo del encabezado) donde la plantilla base deja texto
+// (p.ej. "PRESUPUESTO") que en FACTURAS debe desaparecer.
+// Ajustes finos (solo números):
+const MID_WIPE_Y = 680; // inicio (desde abajo) de la banda a limpiar
+const MID_WIPE_H = 85;  // alto de la banda a limpiar
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
 }
@@ -96,6 +102,21 @@ export async function generatePdf(
   if (budget.presupuestoBottomY !== undefined) {
     drawCenteredTitle(budget.presupuestoBottomY);
   }
+
+  // ============================================================
+  // 2b) LIMPIAR BANDA CENTRAL (NO DEBE VERSE TEXTO DE PRESUPUESTO)
+  //     - Se hace aquí para NO tocar logo/encabezado
+  //     - No depende del detector (robusto)
+  // ============================================================
+
+  firstPage.drawRectangle({
+    x: 0,
+    y: clamp(MID_WIPE_Y, 0, LAYOUT.height),
+    width: LAYOUT.width,
+    height: clamp(MID_WIPE_H, 0, LAYOUT.height),
+    color: rgb(1, 1, 1),
+    opacity: 1,
+  });
 
   // ============================================================
   // 3) CLIENTE / FECHA (SIN SUPERPONER)
