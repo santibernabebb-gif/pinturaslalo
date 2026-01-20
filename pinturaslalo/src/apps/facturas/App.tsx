@@ -36,15 +36,13 @@ const App: React.FC = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastBlobUrl, setLastBlobUrl] = useState<string | null>(null);
   const [invoiceConfig, setInvoiceConfig] = useState({
-    number: "1",
+    // En blanco por defecto: el usuario escribe sin tener que borrar nada.
+    number: "",
     date: new Date().toISOString().split('T')[0]
   });
 
-  // Para que al pulsar en los campos no tenga que borrar un número que viene por defecto.
-  // Solo se limpia la primera vez, y solo si el valor actual es numérico (p. ej. "1").
-  const [didAutoClear, setDidAutoClear] = useState({ clientName: false, invoiceNumber: false });
-
-  const looksNumeric = (value: string) => /^\s*\d+\s*$/.test(value);
+  // Validaciones simples para que el usuario no deje campos obligatorios en blanco
+  const [fieldErrors, setFieldErrors] = useState<{ clientName?: string; invoiceNumber?: string }>({});
 
   // Persistir historial de carga (FACTURAS) aunque vuelvas atrás o recargues la página
   const HISTORY_STORAGE_KEY = 'lalo_facturas_history_v1';
@@ -92,6 +90,10 @@ const App: React.FC = () => {
 
   const startConversion = () => {
     if (selectedBudget) {
+      // Siempre empezar con los campos vacíos (evita tener que borrar valores previos).
+      updateSelectedBudget({ clientName: '' });
+      setInvoiceConfig(prev => ({ ...prev, number: '' }));
+      setFieldErrors({});
       setCurrentStep(Step.SETUP);
     } else {
       setError("Por favor, sube una FACTURA antes de continuar.");
@@ -100,6 +102,20 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!selectedBudget) return;
+
+    // Validar campos obligatorios
+    const nextErrors: { clientName?: string; invoiceNumber?: string } = {};
+    if (!selectedBudget.clientName || selectedBudget.clientName.trim() === '') {
+      nextErrors.clientName = 'Obligatorio';
+    }
+    if (!invoiceConfig.number || invoiceConfig.number.toString().trim() === '') {
+      nextErrors.invoiceNumber = 'Obligatorio';
+    }
+    if (Object.keys(nextErrors).length > 0) {
+      setFieldErrors(nextErrors);
+      return;
+    }
+
     setIsProcessing(true);
     setTimeout(() => {
       setCurrentStep(Step.PREVIEW);
@@ -168,6 +184,8 @@ const App: React.FC = () => {
     setCurrentStep(Step.UPLOAD);
     setShowSuccess(false);
     setLastBlobUrl(null);
+    setInvoiceConfig(prev => ({ ...prev, number: '' }));
+    setFieldErrors({});
   };
 
   const handleClearHistory = () => {
@@ -291,14 +309,17 @@ const App: React.FC = () => {
                       type="text"
                       value={selectedBudget.clientName}
                       onFocus={() => {
-                       if (!didAutoClear.clientName) {
-							updateSelectedBudget({ clientName: '' });
-							setDidAutoClear(prev => ({ ...prev, clientName: true }));
+                        // Quitar aviso de "en blanco" al entrar al campo.
+                        if (fieldErrors.clientName) {
+                          setFieldErrors(prev => ({ ...prev, clientName: undefined }));
                         }
                       }}
                       onChange={(e) => updateSelectedBudget({ clientName: e.target.value.toUpperCase() })}
                       className="w-full mt-1 p-3 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none"
                     />
+                    {fieldErrors.clientName && (
+                      <p className="mt-1 text-[11px] font-black text-red-600">Nombre Cliente está en blanco</p>
+                    )}
                  </div>
                  <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -307,14 +328,17 @@ const App: React.FC = () => {
                         type="number"
                         value={invoiceConfig.number}
                         onFocus={() => {
-                          if (!didAutoClear.invoiceNumber && looksNumeric(invoiceConfig.number)) {
-                            setInvoiceConfig(prev => ({ ...prev, number: '' }));
-                            setDidAutoClear(prev => ({ ...prev, invoiceNumber: true }));
+                          // Quitar aviso de "en blanco" al entrar al campo.
+                          if (fieldErrors.invoiceNumber) {
+                            setFieldErrors(prev => ({ ...prev, invoiceNumber: undefined }));
                           }
                         }}
                         onChange={(e) => setInvoiceConfig({ ...invoiceConfig, number: e.target.value })}
                         className="w-full mt-1 p-3 bg-white border border-slate-100 rounded-xl text-sm font-bold outline-none"
                       />
+                      {fieldErrors.invoiceNumber && (
+                        <p className="mt-1 text-[11px] font-black text-red-600">Nº Factura está en blanco</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha Factura</label>
