@@ -86,48 +86,41 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4. ELIMINAR BLOQUE "IMPORTANTE" (SIN CROPBOX)
-  // Antes se usaba CropBox, pero eso no garantiza ocultación en todos los visores/impresión.
-  // Aquí tapamos el bloque con un rectángulo blanco, dejando un margen en blanco bajo los totales.
-  // - footerMarkerY: Y (PDF) donde empieza el texto "IMPORTANTE".
-  // - ivaMarkerY: Y (PDF) donde está "IVA 21%" (para NO taparlo).
-  // Si no detectamos marcadores, aplicamos un tapado conservador solo en la franja inferior.
-
-  // Asegurar CropBox "normal" por si algún PDF traía uno raro.
-  try {
-    firstPage.setCropBox(0, 0, LAYOUT.width, LAYOUT.height);
-  } catch {
-    // noop
-  }
-
-  const EXTRA_WHITE_MARGIN_ABOVE_IMPORTANTE = 28; // "aire" extra bajo totales
-  const SAFE_GAP_BELOW_IVA = 16;                  // no invadir el bloque IVA/TOTAL
-  const FALLBACK_COVER_TOP = 180;                 // si no detecta, tapar solo la parte baja
-
-  let coverTop = FALLBACK_COVER_TOP;
+  // 4. ELIMINAR "IMPORTANTE" DE FORMA FIABLE (SIN CROPBOX)
+  // Muchos visores/impresoras ignoran CropBox; por eso tapamos visualmente con un rectángulo blanco.
+  // Tapamos TODO desde abajo hasta un poco por encima de la palabra "IMPORTANTE".
   if (budget.footerMarkerY !== undefined) {
-    coverTop = budget.footerMarkerY + EXTRA_WHITE_MARGIN_ABOVE_IMPORTANTE;
-  }
+    // Margen por encima de la palabra para que no se vea ni el subrayado.
+    const EXTRA_TOP_MARGIN = 26;
+    let coverTopY = budget.footerMarkerY + EXTRA_TOP_MARGIN;
 
-  if (budget.ivaMarkerY !== undefined) {
-    // Si IVA está por encima, nunca tapar hasta su Y
-    const maxCoverTop = budget.ivaMarkerY - SAFE_GAP_BELOW_IVA;
-    coverTop = Math.min(coverTop, maxCoverTop);
-  }
+    // Protección: no tapar IVA/TOTAL si por alguna razón quedaran más abajo de lo esperado.
+    // (En la plantilla suelen estar por encima de IMPORTANTE, pero protegemos igualmente.)
+    if (budget.ivaMarkerY !== undefined) {
+      const SAFE_GAP = 18; // aire debajo del bloque de IVA/TOTAL
+      const maxCoverTop = budget.ivaMarkerY - SAFE_GAP;
+      if (coverTopY >= maxCoverTop) {
+        coverTopY = Math.max(0, maxCoverTop);
+      }
+    }
 
-  // Clamp
-  coverTop = Math.max(0, Math.min(LAYOUT.height, coverTop));
+    // Clamp a la altura de página
+    coverTopY = Math.max(0, Math.min(LAYOUT.height, coverTopY));
 
-  // Tapar desde el borde inferior hasta coverTop
-  if (coverTop > 0) {
-    firstPage.drawRectangle({
-      x: 0,
-      y: 0,
-      width: LAYOUT.width,
-      height: coverTop,
-      color: rgb(1, 1, 1),
-      opacity: 1
-    });
+    // Rectángulo blanco que "borra" el pie desde el borde inferior.
+    if (coverTopY > 0) {
+      firstPage.drawRectangle({
+        x: 0,
+        y: 0,
+        width: LAYOUT.width,
+        height: coverTopY,
+        color: rgb(1, 1, 1),
+        opacity: 1,
+        borderOpacity: 0,
+      });
+    }
+  } else {
+    console.warn("Palabra 'IMPORTANTE' no detectada. No se aplicará el borrado del pie.");
   }
 
   const pdfBytes = await pdfDoc.save();
