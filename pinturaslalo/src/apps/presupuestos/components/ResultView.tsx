@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { CheckCircle2, Send, Home } from 'lucide-react';
 import { BudgetData } from '../types';
 import { generateDocx, downloadBlob } from '../services/documentService';
 
@@ -11,7 +12,8 @@ interface Props {
 }
 
 const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownloadComplete }) => {
-  const [showModal, setShowModal] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [lastBlobUrl, setLastBlobUrl] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -64,7 +66,9 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
     try {
       const blob = await generateDocx(data);
       downloadBlob(blob, `Presupuesto_${data.client.replace(/\s/g, '_')}.docx`);
-      setShowModal(true);
+      // Para DOCX mantenemos el mismo modal de "Presupuesto listo" (sin cambiar nada del flujo)
+      setLastBlobUrl(null);
+      setShowSuccess(true);
     } catch (e) {
       console.error("Error al generar Word", e);
     }
@@ -91,37 +95,90 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
     };
     
     // @ts-ignore
-    window.html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf) => {
-      const totalPages = pdf.internal.getNumberOfPages();
-      if (totalPages > 1) {
-        for (let i = totalPages; i > 1; i--) {
-          pdf.deletePage(i);
+    window.html2pdf()
+      .set(opt)
+      .from(element)
+      .toPdf()
+      .get('pdf')
+      .then((pdf) => {
+        const totalPages = pdf.internal.getNumberOfPages();
+        if (totalPages > 1) {
+          for (let i = totalPages; i > 1; i--) {
+            pdf.deletePage(i);
+          }
         }
+
+        // Generar blob para poder compartir/enviar (y descargar como en Facturas)
+        const blob = pdf.output('blob');
+        const blobUrl = URL.createObjectURL(blob);
+        setLastBlobUrl(blobUrl);
+
+        // Descarga forzada
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', `Presupuesto_${data.client.replace(/\s/g, '_')}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        if (!isAuto) setShowSuccess(true);
+      })
+      .catch((e) => {
+        console.error('Error al generar PDF', e);
+      });
+  };
+
+  const sharePresupuesto = async () => {
+    if (!lastBlobUrl) {
+      // Si no hay URL (p.ej. descargó DOCX), simplemente cerramos modal
+      return;
+    }
+    try {
+      const response = await fetch(lastBlobUrl);
+      const blob = await response.blob();
+      const file = new File([blob], `Presupuesto_${data.client.replace(/\s/g, '_')}.pdf`, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: `Presupuesto ${data.client}` });
+      } else {
+        window.open(lastBlobUrl, '_blank');
       }
-    }).save().then(() => {
-      if (!isAuto) setShowModal(true);
-    });
+    } catch (err) {
+      window.open(lastBlobUrl, '_blank');
+    }
   };
 
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6 bg-white rounded-3xl shadow-2xl mt-6 border border-gray-100 relative overflow-hidden">
-      {/* Modal Success */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-10 max-w-sm w-full text-center shadow-2xl animate-in zoom-in duration-300">
-            <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
+      {/* Modal post-descarga (igual que en Facturas) */}
+      {showSuccess && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => setShowSuccess(false)}
+          ></div>
+          <div className="bg-white w-full max-w-[340px] rounded-[36px] p-8 shadow-2xl relative text-center">
+            <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <CheckCircle2 className="w-10 h-10 text-emerald-600" />
             </div>
-            <h3 className="text-2xl font-black text-gray-900 mb-2">DOCUMENTO LISTO</h3>
-            <p className="text-gray-500 mb-8 font-medium">El archivo se ha descargado correctamente.</p>
-            <button 
-              onClick={() => setShowModal(false)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95"
-            >
-              ENTENDIDO
-            </button>
+            <h3 className="text-[22px] font-black mb-2 uppercase tracking-tight">Presupuesto Listo</h3>
+            <p className="text-slate-500 text-sm font-bold mb-8">El archivo se ha descargado. Puedes compartirlo ahora.</p>
+            <div className="space-y-3">
+              <button
+                onClick={sharePresupuesto}
+                className="w-full h-14 bg-blue-600 text-white rounded-2xl font-black text-[15px] flex items-center justify-center gap-3 uppercase tracking-wider shadow-lg shadow-blue-200"
+              >
+                <Send className="w-4.5 h-4.5" /> Compartir / Enviar
+              </button>
+              <button
+                onClick={() => {
+                  setShowSuccess(false);
+                  onReset();
+                }}
+                className="w-full h-14 bg-emerald-50 text-emerald-600 rounded-2xl font-black text-[15px] flex items-center justify-center gap-3 uppercase tracking-wider border border-emerald-100"
+              >
+                <Home className="w-4.5 h-4.5" /> Volver al Inicio
+              </button>
+            </div>
           </div>
         </div>
       )}
