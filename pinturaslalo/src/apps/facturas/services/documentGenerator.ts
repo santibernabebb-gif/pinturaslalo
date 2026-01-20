@@ -86,42 +86,47 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4. ELIMINAR "IMPORTANTE" DE FORMA FIABLE (SIN CROPBOX)
-  // Muchos visores/impresoras ignoran CropBox; por eso tapamos visualmente con un rectángulo blanco.
-  // Tapamos TODO desde abajo hasta un poco por encima de la palabra "IMPORTANTE".
-  if (budget.footerMarkerY !== undefined) {
-    // Margen por encima de la palabra para que no se vea ni el subrayado.
-    const EXTRA_TOP_MARGIN = 26;
-    let coverTopY = budget.footerMarkerY + EXTRA_TOP_MARGIN;
+  // 4) ELIMINAR SIEMPRE TODO DESDE "IMPORTANTE" HACIA ABAJO (SIN CROPBOX)
+  // CropBox puede no aplicarse en algunos visores/impresión; por eso TAPAMOS visualmente el pie.
+  // Reglas (como en tu prompt):
+  //  - Si detectamos Y de "IMPORTANTE": yStart = yImportante + 40
+  //  - Si NO detectamos: yStart = FALLBACK_Y (constante)
+  //  - Dibujar rectángulo blanco opaco desde y=0 hasta yStart
+  //  - IMPORTANTÍSIMO: este rectángulo se dibuja EL ÚLTIMO.
 
-    // Protección: no tapar IVA/TOTAL si por alguna razón quedaran más abajo de lo esperado.
-    // (En la plantilla suelen estar por encima de IMPORTANTE, pero protegemos igualmente.)
-    if (budget.ivaMarkerY !== undefined) {
-      const SAFE_GAP = 18; // aire debajo del bloque de IVA/TOTAL
-      const maxCoverTop = budget.ivaMarkerY - SAFE_GAP;
-      if (coverTopY >= maxCoverTop) {
-        coverTopY = Math.max(0, maxCoverTop);
-      }
-    }
+  // Ajusta este número si tu plantilla cambia. Debe quedar:
+  //  - POR DEBAJO del bloque IVA/TOTAL
+  //  - POR ENCIMA de donde empieza "IMPORTANTE"
+  const FALLBACK_Y = 250;
 
-    // Clamp a la altura de página
-    coverTopY = Math.max(0, Math.min(LAYOUT.height, coverTopY));
-
-    // Rectángulo blanco que "borra" el pie desde el borde inferior.
-    if (coverTopY > 0) {
-      firstPage.drawRectangle({
-        x: 0,
-        y: 0,
-        width: LAYOUT.width,
-        height: coverTopY,
-        color: rgb(1, 1, 1),
-        opacity: 1,
-        borderOpacity: 0,
-      });
-    }
+  let yStart: number;
+  const yImportantePdfLib = budget.footerMarkerY;
+  if (yImportantePdfLib !== undefined && yImportantePdfLib !== null) {
+    yStart = yImportantePdfLib + 40;
   } else {
-    console.warn("Palabra 'IMPORTANTE' no detectada. No se aplicará el borrado del pie.");
+    yStart = FALLBACK_Y;
   }
+
+  // Protección extra: si tenemos marker de IVA, aseguramos que NO tapamos el bloque IVA/TOTAL.
+  if (budget.ivaMarkerY !== undefined && budget.ivaMarkerY !== null) {
+    const SAFE_GAP = 28; // deja margen en blanco bajo los totales
+    const maxYStart = budget.ivaMarkerY - SAFE_GAP;
+    if (yStart >= maxYStart) yStart = maxYStart;
+  }
+
+  // Clamp al rango visible de página
+  yStart = Math.max(0, Math.min(LAYOUT.height, yStart));
+
+  // Tapado FINAL (último draw)
+  firstPage.drawRectangle({
+    x: 0,
+    y: 0,
+    width: LAYOUT.width,
+    height: yStart,
+    color: rgb(1, 1, 1),
+    opacity: 1,
+    borderOpacity: 0,
+  });
 
   const pdfBytes = await pdfDoc.save();
   const blob = new Blob([pdfBytes], { type: 'application/pdf' });
