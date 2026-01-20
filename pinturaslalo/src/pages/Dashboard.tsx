@@ -130,8 +130,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div style={styles.header}>
-        <div style={styles.welcome}>BIEN VENIDO</div>
-        <h1 style={styles.title}>¡Hola de nuevo!</h1>
+        <div style={styles.welcome}>BIENVENIDO</div>
+        <h1 style={styles.title}>¡Hola LALO de nuevo!</h1>
         <p style={styles.subtitle}>¿Qué vamos a gestionar hoy?</p>
       </div>
 
