@@ -86,57 +86,48 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4. SOLUCIÓN OBLIGATORIA (RECORTE / CROP):
-  // Eliminamos visualmente todo desde la marca 'IMPORTANTE' hacia abajo mediante CropBox.
-  const DEBUG_CROP = false;
-  {
-    // Queremos que NO se vea ni "IMPORTANTE" ni nada del pie (incluido el texto grande "PRESUPUESTO" que a veces queda abajo).
-    // Por eso damos algo más de margen y, si no detectamos "IMPORTANTE", aplicamos un recorte por defecto.
-    const EXTRA_BOTTOM_MARGIN = 42;
-    const DEFAULT_CUT_FROM_BOTTOM = 180; // fallback: recorta ~21% inferior de A4
+  // 4. ELIMINAR BLOQUE "IMPORTANTE" (SIN CROPBOX)
+  // Antes se usaba CropBox, pero eso no garantiza ocultación en todos los visores/impresión.
+  // Aquí tapamos el bloque con un rectángulo blanco, dejando un margen en blanco bajo los totales.
+  // - footerMarkerY: Y (PDF) donde empieza el texto "IMPORTANTE".
+  // - ivaMarkerY: Y (PDF) donde está "IVA 21%" (para NO taparlo).
+  // Si no detectamos marcadores, aplicamos un tapado conservador solo en la franja inferior.
 
-    const yImportantePdfLib = budget.footerMarkerY;
-    let yCut = (yImportantePdfLib !== undefined)
-      ? (yImportantePdfLib + EXTRA_BOTTOM_MARGIN)
-      : DEFAULT_CUT_FROM_BOTTOM;
+  // Asegurar CropBox "normal" por si algún PDF traía uno raro.
+  try {
+    firstPage.setCropBox(0, 0, LAYOUT.width, LAYOUT.height);
+  } catch {
+    // noop
+  }
 
-    // Protección: nunca cortar por encima del texto "IVA 21%" (si lo detectamos).
-    // El CropBox muestra desde yCut hacia arriba; si yCut >= ivaY, el bloque de IVA/TOTAL desaparece.
-    if (budget.ivaMarkerY !== undefined) {
-      const ivaY = budget.ivaMarkerY;
-      const SAFE_GAP = 22;
-      const maxAllowedCut = ivaY - SAFE_GAP;
-      if (yCut >= maxAllowedCut) {
-        // Preferimos preservar IVA/TOTAL: el corte NUNCA debe subir por encima del bloque de IVA.
-        yCut = Math.min(yCut, maxAllowedCut);
-        // Asegurar que seguimos tapando "IMPORTANTE" si existe (mínimo 2pt por encima de su Y)
-        if (yImportantePdfLib !== undefined && yCut <= yImportantePdfLib + 2) yCut = yImportantePdfLib + 2;
-        // Si aun así nos pasamos, forzamos a quedar justo por debajo del límite seguro.
-        if (yCut >= maxAllowedCut) yCut = maxAllowedCut - 1;
-      }
-    }
+  const EXTRA_WHITE_MARGIN_ABOVE_IMPORTANTE = 28; // "aire" extra bajo totales
+  const SAFE_GAP_BELOW_IVA = 16;                  // no invadir el bloque IVA/TOTAL
+  const FALLBACK_COVER_TOP = 180;                 // si no detecta, tapar solo la parte baja
 
-    // Clamp básico al rango de página
-    yCut = Math.max(0, Math.min(LAYOUT.height - 1, yCut));
-    
-    // Establecemos el Crop Box: definimos el área visible (desde yCut hasta el tope)
-    const newHeight = LAYOUT.height - yCut;
-    
-    // El CropBox define la región rectangular de la página que se va a mostrar/imprimir.
-    // Solo aplicamos si el cálculo es válido (altura positiva)
-    if (newHeight > 0) {
-      firstPage.setCropBox(0, yCut, LAYOUT.width, newHeight);
-    }
+  let coverTop = FALLBACK_COVER_TOP;
+  if (budget.footerMarkerY !== undefined) {
+    coverTop = budget.footerMarkerY + EXTRA_WHITE_MARGIN_ABOVE_IMPORTANTE;
+  }
 
-    if (DEBUG_CROP && newHeight > 0) {
-      // Línea guía en el punto de corte
-      firstPage.drawLine({
-        start: { x: 0, y: yCut },
-        end: { x: LAYOUT.width, y: yCut },
-        thickness: 1,
-        color: rgb(1, 0, 0),
-      });
-    }
+  if (budget.ivaMarkerY !== undefined) {
+    // Si IVA está por encima, nunca tapar hasta su Y
+    const maxCoverTop = budget.ivaMarkerY - SAFE_GAP_BELOW_IVA;
+    coverTop = Math.min(coverTop, maxCoverTop);
+  }
+
+  // Clamp
+  coverTop = Math.max(0, Math.min(LAYOUT.height, coverTop));
+
+  // Tapar desde el borde inferior hasta coverTop
+  if (coverTop > 0) {
+    firstPage.drawRectangle({
+      x: 0,
+      y: 0,
+      width: LAYOUT.width,
+      height: coverTop,
+      color: rgb(1, 1, 1),
+      opacity: 1
+    });
   }
 
   const pdfBytes = await pdfDoc.save();
