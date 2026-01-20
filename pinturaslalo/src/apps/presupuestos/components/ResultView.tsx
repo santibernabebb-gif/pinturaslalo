@@ -183,29 +183,6 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
             className="bg-white shadow-2xl p-10 md:p-12 w-[210mm] h-[297mm] min-w-[210mm] min-h-[297mm] text-black font-sans relative flex flex-col box-border overflow-hidden"
             style={{ lineHeight: '1.2' }}
           >
-            {/* Marca de agua superior e inferior (como la plantilla original) */}
-            <div className="absolute left-0 right-0 top-[14mm] text-center pointer-events-none select-none">
-              <div className="text-[44px] font-black tracking-[0.12em] uppercase text-slate-800/40">PRESUPUESTO</div>
-              <div
-                className="text-[44px] font-black tracking-[0.12em] uppercase text-slate-800/15"
-                style={{ transform: 'scaleY(-1)', marginTop: '-10px' }}
-              >
-                PRESUPUESTO
-              </div>
-            </div>
-
-            <div className="absolute left-0 right-0 bottom-[14mm] text-center pointer-events-none select-none">
-              <div className="text-[44px] font-black tracking-[0.12em] uppercase text-slate-800/30">PRESUPUESTO</div>
-              <div
-                className="text-[44px] font-black tracking-[0.12em] uppercase text-slate-800/12"
-                style={{ transform: 'scaleY(-1)', marginTop: '-10px' }}
-              >
-                PRESUPUESTO
-              </div>
-            </div>
-
-            {/* Contenido por encima de la marca de agua */}
-            <div className="relative z-10 flex flex-col h-full">
             {/* Cabecera idéntica a la plantilla real */}
             <div className={`flex justify-between items-start ${isUltraCompact ? 'mb-4' : 'mb-8'}`}>
               <div className="flex flex-col">
@@ -232,7 +209,9 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
               </div>
             </div>
             
-            {/* (Título en marca de agua, como la plantilla original) */}
+            <div className={`text-center ${isUltraCompact ? 'mb-4' : 'mb-6'}`}>
+               <h1 className={`${styles.titleSize} font-black text-slate-800 tracking-[0.1em] uppercase border-b-2 border-slate-800 pb-1 inline-block`}>PRESUPUESTO</h1>
+            </div>
 
             {/* Recuadro de Cliente */}
             <div className={`${styles.sectionGap} bg-slate-50 p-3 border-2 border-slate-200 rounded-xl flex justify-between items-center shadow-sm`}>
@@ -302,8 +281,6 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
 
             <div className="pt-4 text-center">
               <p className="text-[7px] text-slate-300 uppercase tracking-[0.4em] font-black">SantiSystems Optic Engine</p>
-            </div>
-
             </div>
           </div>
         </div>

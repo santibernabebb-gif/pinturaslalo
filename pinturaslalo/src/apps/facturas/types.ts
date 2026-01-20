@@ -23,6 +23,14 @@ export interface BudgetData {
   };
   footerMarkerY?: number; // Coordenada Y de la palabra 'IMPORTANTE'
   ivaMarkerY?: number;    // Coordenada Y del bloque "IVA 21%" (para proteger el recorte)
+
+  // Coordenadas Y de las marcas "PRESUPUESTO" (arriba y abajo) para reemplazar por "FACTURA"
+  presupuestoTopY?: number;
+  presupuestoBottomY?: number;
+
+  // Coordenadas Y de las etiquetas (para colocar texto sin superponer)
+  clienteLabelY?: number;
+  fechaLabelY?: number;
 }
 
 export interface InvoiceConfig {

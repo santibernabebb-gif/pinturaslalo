@@ -49,6 +49,10 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
 
   let footerMarkerY: number | undefined = undefined;
   let ivaMarkerY: number | undefined = undefined;
+  let presupuestoTopY: number | undefined = undefined;
+  let presupuestoBottomY: number | undefined = undefined;
+  let clienteLabelY: number | undefined = undefined;
+  let fechaLabelY: number | undefined = undefined;
   let currentRunText = "";
   let currentRunY = -1;
   let lastXEnd = -1;
@@ -77,6 +81,20 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
           ivaMarkerY = currentRunY;
         }
 
+        // Guardar posiciones de "PRESUPUESTO" (arriba y abajo) para reemplazo por "FACTURA"
+        if (normalized === "PRESUPUESTO") {
+          if (presupuestoTopY === undefined || currentRunY > presupuestoTopY) presupuestoTopY = currentRunY;
+          if (presupuestoBottomY === undefined || currentRunY < presupuestoBottomY) presupuestoBottomY = currentRunY;
+        }
+
+        // Coordenadas de etiquetas (para colocar texto sin superponer)
+        if (clienteLabelY === undefined && normalized === "CLIENTE") {
+          clienteLabelY = currentRunY;
+        }
+        if (fechaLabelY === undefined && normalized === "FECHA") {
+          fechaLabelY = currentRunY;
+        }
+
         if (normalized.includes("IMPORTANTE")) {
           footerMarkerY = currentRunY;
           break; // Detener búsqueda al encontrar la marca
@@ -102,6 +120,18 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
       ivaMarkerY = currentRunY;
     }
 
+    if (normalized === "PRESUPUESTO") {
+      if (presupuestoTopY === undefined || currentRunY > presupuestoTopY) presupuestoTopY = currentRunY;
+      if (presupuestoBottomY === undefined || currentRunY < presupuestoBottomY) presupuestoBottomY = currentRunY;
+    }
+
+    if (clienteLabelY === undefined && normalized === "CLIENTE") {
+      clienteLabelY = currentRunY;
+    }
+    if (fechaLabelY === undefined && normalized === "FECHA") {
+      fechaLabelY = currentRunY;
+    }
+
     if (normalized.includes("IMPORTANTE")) {
       footerMarkerY = currentRunY;
     }
@@ -118,6 +148,10 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
     total: 0,
     originalBuffer: arrayBuffer,
     footerMarkerY,
-    ivaMarkerY
+    ivaMarkerY,
+    presupuestoTopY,
+    presupuestoBottomY,
+    clienteLabelY,
+    fechaLabelY
   };
 }
