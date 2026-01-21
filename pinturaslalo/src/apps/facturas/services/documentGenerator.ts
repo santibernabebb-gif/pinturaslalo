@@ -14,7 +14,7 @@ const OVERLAY = {
     // Zona del título "PRESUPUESTO" (sin tocar la cabecera superior)
     titleWipe: { x: 0, y: 700, w: 595, h: 60 },
     // Zona central donde va el bloque Cliente/Fecha (caja grande)
-    clientWipe: { x: 40, y: 600, w: 515, h:  55 },
+    clientWipe: { x: 40, y: 600, w: 515, h: 55 },
   },
   texts: {
     titulo: { size: 34, label: "FACTURA" },
@@ -24,21 +24,21 @@ const OVERLAY = {
 };
 
 export async function generatePdf(
-  budget: BudgetData, 
-  config: InvoiceConfig, 
+  budget: BudgetData,
+  config: InvoiceConfig,
   invoiceCode: string
 ): Promise<string> {
   const PDFLib = (window as any).PDFLib;
   if (!PDFLib) throw new Error("PDF-Lib no cargada.");
-  
+
   const { PDFDocument, rgb, StandardFonts, degrees } = PDFLib;
 
   if (!budget.originalBuffer) throw new Error("No hay buffer original.");
 
-  const pdfDoc = await PDFDocument.load(new Uint8Array(budget.originalBuffer), { 
-    ignoreEncryption: true 
+  const pdfDoc = await PDFDocument.load(new Uint8Array(budget.originalBuffer), {
+    ignoreEncryption: true
   });
-  
+
   const pages = pdfDoc.getPages();
   const firstPage = pages[0];
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -50,14 +50,14 @@ export async function generatePdf(
   // Y = baseline del texto en coordenadas PDF; bajamos el wipe para no tocar arriba.
   const titleWipe = titleY !== undefined
     ? (() => {
-        // Tapar "PRESUPUESTO" sin tocar la cabecera superior (logo/datos)
-        const HEADER_LIMIT = 720; // techo del rectángulo de borrado
-        const WIPE_H = 62;
-        let y = Math.max(0, titleY - 32);
-        // Si el rectángulo sube demasiado, lo bajamos
-        if (y + WIPE_H > HEADER_LIMIT) y = Math.max(0, HEADER_LIMIT - WIPE_H);
-        return { x: 0, y, w: 595, h: WIPE_H };
-      })()
+      // Tapar "PRESUPUESTO" sin tocar la cabecera superior (logo/datos)
+      const HEADER_LIMIT = 720; // techo del rectángulo de borrado
+      const WIPE_H = 62;
+      let y = Math.max(0, titleY - 32);
+      // Si el rectángulo sube demasiado, lo bajamos
+      if (y + WIPE_H > HEADER_LIMIT) y = Math.max(0, HEADER_LIMIT - WIPE_H);
+      return { x: 0, y, w: 595, h: WIPE_H };
+    })()
     : OVERLAY.fallback.titleWipe;
 
   firstPage.drawRectangle({
@@ -123,33 +123,42 @@ export async function generatePdf(
   });
 
   // 4) BORRAR DESDE "NOTAS" HACIA ABAJO (sin tapar Base/IVA/Total)
-  // Preferimos NOTAS (más estable). Si no está, caemos a IMPORTANTE.
-  const FALLBACK_Y = 85; // zona MUY baja si no hay marcador
-  const ABOVE_NOTES_MARGIN = 18;  // tapamos incluyendo la palabra "NOTAS"
+  // ✅ CAMBIO ÚNICO: aseguramos que "NOTAS:" desaparece SIEMPRE.
+  // - Si hay marcador notesMarkerY, lo usamos.
+  // - Si no hay marcador, usamos una Y fija (porque en esta plantilla NOTAS está siempre en el mismo sitio).
+  // - Y luego protegemos el bloque de totales para no cortarlo nunca.
 
-  const markerY = typeof budget.notesMarkerY === 'number'
-    ? budget.notesMarkerY
-    : (typeof budget.footerMarkerY === 'number' ? budget.footerMarkerY : undefined);
+  // Y fija (plantilla): altura aproximada de la raya encima de NOTAS.
+  // Esto hace que, aunque falle el detector, NO se vea NOTAS nunca.
+  const FIXED_NOTES_CUT_Y = 145;
 
-  // OJO: el rectángulo blanco se dibuja desde y=0 hasta yStart (altura = yStart).
-  // Para borrar "desde NOTAS hacia abajo" debemos poner yStart por DEBAJO de NOTAS (no por encima).
-  let yStart = (typeof markerY === 'number' ? (markerY + ABOVE_NOTES_MARGIN) : FALLBACK_Y);
+  // Margen para cubrir letras y la raya (subimos un poco para tapar "NOTAS:" completo)
+  const NOTES_COVER_MARGIN = 45;
 
-  // Protección extra: si detectamos el bloque de totales, jamás subimos el wipe por encima de él
-  // (evita cortar TOTAL si el detector de NOTAS falla).
+  const markerY =
+    (typeof budget.notesMarkerY === 'number' ? budget.notesMarkerY : undefined) ??
+    (typeof budget.footerMarkerY === 'number' ? budget.footerMarkerY : undefined);
+
+  // Queremos tapar desde abajo hasta justo "a la altura de NOTAS / raya".
+  // En pdf-lib: drawRectangle con y=0 y height=yStart tapa la parte inferior.
+  // Para que NOTAS desaparezca, yStart debe estar por ENCIMA del texto "NOTAS:".
+  let yStart = typeof markerY === 'number'
+    ? (markerY + NOTES_COVER_MARGIN)
+    : FIXED_NOTES_CUT_Y;
+
+  // Protección: no cortar totales nunca
+  // (Si los detectores fallan, este límite evita tapar Base/IVA/Total).
   if (typeof budget.totalBlockMarkerY === 'number') {
     const maxAllowed = budget.totalBlockMarkerY - 20;
     if (yStart > maxAllowed) yStart = maxAllowed;
   }
 
-  // Protección adicional: si detectamos IVA, también sirve como límite.
   if (typeof budget.ivaMarkerY === 'number') {
     const maxAllowed = budget.ivaMarkerY - 20;
     if (yStart > maxAllowed) yStart = maxAllowed;
   }
 
-  if (yStart < 0) yStart = 0;
-
+  // Clamp
   yStart = Math.max(0, Math.min(LAYOUT.height, yStart));
 
   // Tapado final (DEBE ser lo último que se dibuja)
@@ -169,8 +178,8 @@ export async function generatePdf(
 }
 
 export async function generateDocx(
-  _budget: BudgetData, 
-  _config: InvoiceConfig, 
+  _budget: BudgetData,
+  _config: InvoiceConfig,
   _invoiceCode: string
 ) {
   alert("El modo Word no está disponible.");
