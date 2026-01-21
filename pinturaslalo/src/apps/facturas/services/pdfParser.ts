@@ -49,6 +49,10 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
 
   let footerMarkerY: number | undefined = undefined;
   let ivaMarkerY: number | undefined = undefined;
+  let notesMarkerY: number | undefined = undefined;
+  let titleMarkerY: number | undefined = undefined;
+  let titleMarkerX: number | undefined = undefined;
+  let clientBoxMarkerY: number | undefined = undefined;
   let currentRunText = "";
   let currentRunY = -1;
   let lastXEnd = -1;
@@ -75,6 +79,23 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
         // Guardar la posición de IVA 21% (si aparece) para proteger el recorte.
         if (ivaMarkerY === undefined && normalized.includes("IVA") && normalized.includes("21")) {
           ivaMarkerY = currentRunY;
+        }
+
+        // Marcar título PRESUPUESTO (para taparlo y escribir FACTURA encima, sin tocar cabecera)
+        if (titleMarkerY === undefined && normalized.includes("PRESUPUESTO")) {
+          titleMarkerY = currentRunY;
+          // Aproximación X: tomamos el primer item del run (más a la izquierda)
+          titleMarkerX = lastXEnd - item.width; // fallback
+        }
+
+        // Marcar zona de cliente (para tapar el contenido original)
+        if (clientBoxMarkerY === undefined && (normalized.includes("PARA EL CLIENTE") || normalized.includes("CLIENTE"))) {
+          clientBoxMarkerY = currentRunY;
+        }
+
+        // Marcar "NOTAS" para borrar todo hacia abajo (más fiable que IMPORTANTE)
+        if (notesMarkerY === undefined && normalized.startsWith("NOTAS")) {
+          notesMarkerY = currentRunY;
         }
 
         if (normalized.includes("IMPORTANTE")) {
@@ -118,6 +139,10 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
     total: 0,
     originalBuffer: arrayBuffer,
     footerMarkerY,
-    ivaMarkerY
+    ivaMarkerY,
+    notesMarkerY,
+    titleMarkerY,
+    titleMarkerX,
+    clientBoxMarkerY
   };
 }

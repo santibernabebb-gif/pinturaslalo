@@ -82,9 +82,10 @@ const App: React.FC = () => {
       const dateObj = new Date(invoiceConfig.date);
       const monthAbrev = MONTHS_ABREV_ES[dateObj.getMonth()];
       const year = dateObj.getFullYear().toString().slice(-2);
-      return `${monthAbrev}-${year} FACTURA ${invoiceConfig.number}`;
+      // Formato vertical/lateral: "ENE-26_FACTURA_222"
+      return `${monthAbrev}-${year}_FACTURA_${invoiceConfig.number}`;
     } catch (e) {
-      return `???-26 FACTURA ${invoiceConfig.number}`;
+      return `???-??_FACTURA_${invoiceConfig.number}`;
     }
   };
 

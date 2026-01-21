@@ -23,6 +23,12 @@ export interface BudgetData {
   };
   footerMarkerY?: number; // Coordenada Y de la palabra 'IMPORTANTE'
   ivaMarkerY?: number;    // Coordenada Y del bloque "IVA 21%" (para proteger el recorte)
+
+  // Marcadores adicionales (coordenadas en el sistema PDFJS) para overlays
+  titleMarkerY?: number;      // Y del texto "PRESUPUESTO" (título)
+  titleMarkerX?: number;      // X aproximada del título
+  clientBoxMarkerY?: number;  // Y del bloque "PARA EL CLIENTE" (para tapar...)
+  notesMarkerY?: number;      // Y del texto "NOTAS" (para borrar hacia abajo)
 }
 
 export interface InvoiceConfig {
