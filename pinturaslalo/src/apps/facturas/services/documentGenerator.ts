@@ -8,13 +8,9 @@ const LAYOUT = {
 
 // Nota: NO tocamos la cabecera (logo/emisor). Solo tapamos zonas concretas.
 const OVERLAY = {
-  // Rectángulos por defecto (fallback) si no se detectan marcadores en el PDF.
-  // Coordenadas en puntos PDF (origen abajo-izquierda).
   fallback: {
-    // Zona del título "PRESUPUESTO" (sin tocar la cabecera superior)
     titleWipe: { x: 0, y: 700, w: 595, h: 60 },
-    // Zona central donde va el bloque Cliente/Fecha (caja grande)
-    clientWipe: { x: 40, y: 600, w: 515, h:  55 },
+    clientWipe: { x: 40, y: 600, w: 515, h: 55 },
   },
   texts: {
     titulo: { size: 34, label: "FACTURA" },
@@ -43,21 +39,26 @@ export async function generatePdf(
   const firstPage = pages[0];
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // 1) TAPAR SOLO el título "PRESUPUESTO" y escribir "FACTURA" en el mismo sitio.
-  //    (No tocamos cabecera ni el bloque gris de "para el cliente")
-
+  // 1) TAPAR SOLO el título "PRESUPUESTO" y escribir "FACTURA"
   const titleY = typeof budget.titleMarkerY === 'number' ? budget.titleMarkerY : undefined;
 
-  // 🔧 NUEVO: franja segura del título (entre cabecera y bloque gris)
-  // - No puede subir a la cabecera
-  // - No puede bajar al bloque gris "para el cliente"
-  const SAFE_TOP = 710;      // techo (no tocar datos/logo)
-  const SAFE_BOTTOM = 650;   // suelo (no tocar bloque gris)
-  const WIPE_H = 48;         // altura justa para "PRESUPUESTO" + su línea
+  // Franja segura (no tocar cabecera ni bloque gris)
+  const SAFE_TOP = 710;      // techo
+  const SAFE_BOTTOM = 650;   // suelo
+
+  // 🔧 AJUSTE: hacemos el blanco ~1cm más grande
+  const WIPE_H = 76;         // antes 48 (≈ +28 puntos ~ 1 cm)
 
   const titleWipe = (() => {
-    // base: lo bajamos para incluir la línea inferior y no morder cabecera
-    let y = (titleY !== undefined) ? (titleY - 44) : 670;
+    // base: calculamos igual que antes, pero hacemos crecer hacia ARRIBA:
+    // al aumentar la altura, bajamos y la mitad del extra (o todo el extra) para cubrir arriba.
+    let yBase = (titleY !== undefined) ? (titleY - 44) : 670;
+
+    // extra respecto a antes (48 -> 76)
+    const EXTRA = 76 - 48; // 28
+
+    // bajamos el rectángulo para que el crecimiento sea hacia arriba
+    let y = yBase - EXTRA;
 
     // clamp dentro de la franja segura
     if (y + WIPE_H > SAFE_TOP) y = SAFE_TOP - WIPE_H;
@@ -79,7 +80,7 @@ export async function generatePdf(
   const titleSize = OVERLAY.texts.titulo.size;
   const titleWidth = fontBold.widthOfTextAtSize(titleText, titleSize);
 
-  // 🔧 NUEVO: dibujamos FACTURA dentro del rectángulo blanco (centrado verticalmente)
+  // FACTURA se queda donde estaba (bien centrado dentro del blanco)
   const drawTitleY = titleWipe.y + 10;
 
   firstPage.drawText(titleText, {
@@ -90,7 +91,7 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 2) TAPAR la zona central del cliente original y escribir el cliente/fecha de la app
+  // 2) TAPAR la zona central del cliente original y escribir cliente/fecha
   const clientY = typeof budget.clientBoxMarkerY === 'number' ? budget.clientBoxMarkerY : undefined;
   const clientWipe = clientY !== undefined
     ? { x: 40, y: Math.max(0, clientY - 28), w: 515, h: 78 }
@@ -119,7 +120,7 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 3. Escribir código de factura lateral
+  // 3) Lateral factura
   firstPage.drawText(invoiceCode, {
     x: OVERLAY.texts.num_lateral.x,
     y: OVERLAY.texts.num_lateral.y,
@@ -129,9 +130,8 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4) BORRAR DESDE NOTAS HACIA ABAJO (ya lo tienes perfecto, NO tocar)
+  // 4) NOTAS (esto ya está perfecto, NO tocar)
   const NOTES_LINE_Y = 105;
-
   firstPage.drawRectangle({
     x: 0,
     y: 0,
