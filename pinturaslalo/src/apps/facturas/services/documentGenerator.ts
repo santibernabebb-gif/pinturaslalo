@@ -14,12 +14,12 @@ const OVERLAY = {
     // Zona del título "PRESUPUESTO" (sin tocar la cabecera superior)
     titleWipe: { x: 0, y: 700, w: 595, h: 60 },
     // Zona central donde va el bloque Cliente/Fecha (caja grande)
-    clientWipe: { x: 40, y: 590, w: 515, h: 70 },
+    clientWipe: { x: 40, y: 600, w: 515, h:  55 },
   },
   texts: {
     titulo: { size: 34, label: "FACTURA" },
     sub_datos: { size: 11 },
-    num_lateral: { x: 14, y: 635, size: 13, rotateDeg: 90 }
+    num_lateral: { x: 14, y: 560, size: 13, rotateDeg: 90 }
   }
 };
 
@@ -49,7 +49,15 @@ export async function generatePdf(
   // Tapamos SOLO la zona del texto "PRESUPUESTO" (sin subir a cabecera).
   // Y = baseline del texto en coordenadas PDF; bajamos el wipe para no tocar arriba.
   const titleWipe = titleY !== undefined
-    ? { x: 0, y: Math.max(0, titleY - 20), w: 595, h: 70 }
+    ? (() => {
+        // Tapar "PRESUPUESTO" sin tocar la cabecera superior (logo/datos)
+        const HEADER_LIMIT = 720; // techo del rectángulo de borrado
+        const WIPE_H = 62;
+        let y = Math.max(0, titleY - 32);
+        // Si el rectángulo sube demasiado, lo bajamos
+        if (y + WIPE_H > HEADER_LIMIT) y = Math.max(0, HEADER_LIMIT - WIPE_H);
+        return { x: 0, y, w: 595, h: WIPE_H };
+      })()
     : OVERLAY.fallback.titleWipe;
 
   firstPage.drawRectangle({
@@ -65,7 +73,7 @@ export async function generatePdf(
   const titleSize = OVERLAY.texts.titulo.size;
   const titleWidth = fontBold.widthOfTextAtSize(titleText, titleSize);
   // Dibujamos FACTURA un poco más abajo que el PRESUPUESTO original para que no tape cabecera
-  const drawTitleY = titleY !== undefined ? (titleY - 10) : (OVERLAY.fallback.titleWipe.y + 10);
+  const drawTitleY = titleY !== undefined ? (titleY - 25) : (OVERLAY.fallback.titleWipe.y + 10);
 
   firstPage.drawText(titleText, {
     x: (LAYOUT.width - titleWidth) / 2,
@@ -117,7 +125,7 @@ export async function generatePdf(
   // 4) BORRAR DESDE "NOTAS" HACIA ABAJO (sin tapar Base/IVA/Total)
   // Preferimos NOTAS (más estable). Si no está, caemos a IMPORTANTE.
   const FALLBACK_Y = 85; // zona MUY baja si no hay marcador
-  const BELOW_NOTES_GAP = 6;  // tapamos desde justo debajo de la palabra "NOTAS"
+  const ABOVE_NOTES_MARGIN = 18;  // tapamos incluyendo la palabra "NOTAS"
 
   const markerY = typeof budget.notesMarkerY === 'number'
     ? budget.notesMarkerY
@@ -125,7 +133,7 @@ export async function generatePdf(
 
   // OJO: el rectángulo blanco se dibuja desde y=0 hasta yStart (altura = yStart).
   // Para borrar "desde NOTAS hacia abajo" debemos poner yStart por DEBAJO de NOTAS (no por encima).
-  let yStart = (typeof markerY === 'number' ? (markerY - BELOW_NOTES_GAP) : FALLBACK_Y);
+  let yStart = (typeof markerY === 'number' ? (markerY + ABOVE_NOTES_MARGIN) : FALLBACK_Y);
 
   // Protección extra: si detectamos el bloque de totales, jamás subimos el wipe por encima de él
   // (evita cortar TOTAL si el detector de NOTAS falla).
