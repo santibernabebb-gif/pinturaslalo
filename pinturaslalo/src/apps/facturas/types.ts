@@ -29,6 +29,7 @@ export interface BudgetData {
   titleMarkerX?: number;      // X aproximada del título
   clientBoxMarkerY?: number;  // Y del bloque "PARA EL CLIENTE" (para tapar...)
   notesMarkerY?: number;      // Y del texto "NOTAS" (para borrar hacia abajo)
+  totalBlockMarkerY?: number; // Y del texto "TOTAL" del bloque de totales (para proteger el recorte)
 }
 
 export interface InvoiceConfig {

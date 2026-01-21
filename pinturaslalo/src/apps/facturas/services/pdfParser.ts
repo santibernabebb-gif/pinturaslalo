@@ -50,6 +50,7 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
   let footerMarkerY: number | undefined = undefined;
   let ivaMarkerY: number | undefined = undefined;
   let notesMarkerY: number | undefined = undefined;
+  let totalBlockMarkerY: number | undefined = undefined;
   let titleMarkerY: number | undefined = undefined;
   let titleMarkerX: number | undefined = undefined;
   let clientBoxMarkerY: number | undefined = undefined;
@@ -81,6 +82,14 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
           ivaMarkerY = currentRunY;
         }
 
+        // Marcar "TOTAL" del bloque de totales (NO el del encabezado de tabla "TOTAL (€)")
+        // Tomamos el más bajo (menor Y). Suele estar junto a BASE/IVA en la esquina inferior derecha.
+        if (normalized === "TOTAL") {
+          if (totalBlockMarkerY === undefined || currentRunY < totalBlockMarkerY) {
+            totalBlockMarkerY = currentRunY;
+          }
+        }
+
         // Marcar título PRESUPUESTO (para taparlo y escribir FACTURA encima, sin tocar cabecera)
         if (titleMarkerY === undefined && normalized.includes("PRESUPUESTO")) {
           titleMarkerY = currentRunY;
@@ -94,8 +103,11 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
         }
 
         // Marcar "NOTAS" para borrar todo hacia abajo (más fiable que IMPORTANTE)
-        if (notesMarkerY === undefined && normalized.startsWith("NOTAS")) {
-          notesMarkerY = currentRunY;
+        // Tomamos la más baja (menor Y) por si hay textos repetidos o partidos.
+        if (normalized.startsWith("NOTAS")) {
+          if (notesMarkerY === undefined || currentRunY < notesMarkerY) {
+            notesMarkerY = currentRunY;
+          }
         }
 
         if (normalized.includes("IMPORTANTE")) {
@@ -141,6 +153,7 @@ export async function parseBudgetPdf(file: File): Promise<BudgetData> {
     footerMarkerY,
     ivaMarkerY,
     notesMarkerY,
+    totalBlockMarkerY,
     titleMarkerY,
     titleMarkerX,
     clientBoxMarkerY
