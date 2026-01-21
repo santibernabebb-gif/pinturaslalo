@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { BudgetData } from '../types';
 import { generateDocx, downloadBlob } from '../services/documentService';
@@ -12,6 +11,8 @@ interface Props {
 
 const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownloadComplete }) => {
   const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState<'docx' | 'pdf'>('docx');
+  const [lastPdfUrl, setLastPdfUrl] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -35,8 +36,8 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
       if (containerRef.current) {
         const padding = window.innerWidth < 768 ? 20 : 48;
         const availableWidth = containerRef.current.offsetWidth - padding;
-        const a4WidthPx = 794; 
-        
+        const a4WidthPx = 794;
+
         if (availableWidth < a4WidthPx) {
           setScale(availableWidth / a4WidthPx);
         } else {
@@ -64,6 +65,7 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
     try {
       const blob = await generateDocx(data);
       downloadBlob(blob, `Presupuesto_${data.client.replace(/\s/g, '_')}.docx`);
+      setModalType('docx');
       setShowModal(true);
     } catch (e) {
       console.error("Error al generar Word", e);
@@ -73,14 +75,16 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
   const handleDownloadPdf = (isAuto = false) => {
     const element = document.getElementById('template-preview');
     if (!element) return;
-    
+
+    const filename = `Presupuesto_${data.client.replace(/\s/g, '_')}.pdf`;
+
     const opt = {
       margin: 0,
-      filename: `Presupuesto_${data.client.replace(/\s/g, '_')}.pdf`,
+      filename,
       image: { type: 'jpeg', quality: 1.0 },
-      html2canvas: { 
-        scale: 2, 
-        useCORS: true, 
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
         letterRendering: true,
         scrollY: 0,
         windowWidth: 794,
@@ -89,18 +93,59 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true },
       pagebreak: { mode: 'avoid-all' }
     };
-    
+
     // @ts-ignore
-    window.html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf) => {
-      const totalPages = pdf.internal.getNumberOfPages();
-      if (totalPages > 1) {
-        for (let i = totalPages; i > 1; i--) {
-          pdf.deletePage(i);
+    window.html2pdf()
+      .set(opt)
+      .from(element)
+      .toPdf()
+      .get('pdf')
+      .then((pdf) => {
+        const totalPages = pdf.internal.getNumberOfPages();
+        if (totalPages > 1) {
+          for (let i = totalPages; i > 1; i--) {
+            pdf.deletePage(i);
+          }
         }
+
+        const blob = pdf.output('blob');
+        const url = URL.createObjectURL(blob);
+
+        // Guardar URL para compartir
+        setLastPdfUrl(url);
+
+        // Forzar descarga
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        if (!isAuto) {
+          setModalType('pdf');
+          setShowModal(true);
+        }
+      })
+      .catch((e) => console.error('Error al generar PDF', e));
+  };
+
+  const sharePresupuesto = async () => {
+    if (!lastPdfUrl) return;
+    try {
+      const response = await fetch(lastPdfUrl);
+      const blob = await response.blob();
+      const filename = `Presupuesto_${data.client.replace(/\s/g, '_')}.pdf`;
+      const file = new File([blob], filename, { type: 'application/pdf' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Presupuesto' });
+      } else {
+        window.open(lastPdfUrl, '_blank');
       }
-    }).save().then(() => {
-      if (!isAuto) setShowModal(true);
-    });
+    } catch {
+      window.open(lastPdfUrl, '_blank');
+    }
   };
 
   return (
@@ -114,14 +159,40 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h3 className="text-2xl font-black text-gray-900 mb-2">DOCUMENTO LISTO</h3>
-            <p className="text-gray-500 mb-8 font-medium">El archivo se ha descargado correctamente.</p>
-            <button 
-              onClick={() => setShowModal(false)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95"
-            >
-              ENTENDIDO
-            </button>
+
+            {modalType === 'pdf' ? (
+              <>
+                <h3 className="text-2xl font-black text-gray-900 mb-2 uppercase">PRESUPUESTO LISTO</h3>
+                <p className="text-gray-500 mb-8 font-medium">El archivo se ha descargado. Puedes compartirlo ahora.</p>
+
+                <div className="space-y-3">
+                  <button
+                    onClick={sharePresupuesto}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95 uppercase"
+                  >
+                    COMPARTIR / ENVIAR
+                  </button>
+
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="w-full bg-emerald-50 text-emerald-700 font-black py-4 rounded-2xl transition-all border border-emerald-100 active:scale-95 uppercase"
+                  >
+                    VOLVER
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-2xl font-black text-gray-900 mb-2">DOCUMENTO LISTO</h3>
+                <p className="text-gray-500 mb-8 font-medium">El archivo se ha descargado correctamente.</p>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all shadow-lg active:scale-95"
+                >
+                  ENTENDIDO
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -132,7 +203,7 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Plantilla: Lalo Quilis Oficial (v2.2 Original)</p>
         </div>
         <div className="flex space-x-3">
-          <button 
+          <button
             onClick={onReset}
             className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-black transition flex items-center space-x-2 text-xs"
           >
@@ -154,6 +225,7 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
           </svg>
           <span className="font-black text-sm uppercase">WORD (.DOCX)</span>
         </button>
+
         <button
           onClick={() => handleDownloadPdf(false)}
           className="flex items-center justify-center space-x-3 bg-blue-600 text-white py-4 px-6 rounded-2xl hover:bg-blue-700 transition-all shadow-xl active:scale-95"
@@ -165,20 +237,20 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
         </button>
       </div>
 
-      <div 
+      <div
         ref={containerRef}
         className="bg-zinc-200 p-2 sm:p-6 md:p-10 rounded-3xl shadow-inner flex justify-center items-start overflow-hidden border border-gray-300"
-        style={{ minHeight: `${scale * 1122}px` }} 
+        style={{ minHeight: `${scale * 1122}px` }}
       >
-        <div 
-          style={{ 
-            transform: `scale(${scale})`, 
+        <div
+          style={{
+            transform: `scale(${scale})`,
             transformOrigin: 'top center',
             transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
           }}
         >
-          <div 
-            id="template-preview" 
+          <div
+            id="template-preview"
             ref={previewRef}
             className="bg-white shadow-2xl p-10 md:p-12 w-[210mm] h-[297mm] min-w-[210mm] min-h-[297mm] text-black font-sans relative flex flex-col box-border overflow-hidden"
             style={{ lineHeight: '1.2' }}
@@ -193,24 +265,24 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
                   <p className="text-gray-900 font-black pt-1">Tel: 620-944-229 • NIF: 21667776-M</p>
                 </div>
               </div>
-              
+
               <div className="flex flex-col items-end">
                 <div className={`bg-slate-900 text-white p-2 rounded-xl flex flex-col items-center ${isUltraCompact ? 'w-32' : 'w-40'} shadow-xl`}>
                   <div className="flex items-center space-x-2 w-full justify-center">
                     <div className={`${isUltraCompact ? 'text-sm' : 'text-lg'} font-black leading-tight tracking-tighter text-center`}>LALO<br/>QUILIS</div>
                     <div className={`${isUltraCompact ? 'h-6' : 'h-8'} w-1.5 flex flex-col justify-between`}>
-                        <div className="h-1/3 bg-sky-400"></div>
-                        <div className="h-1/3 bg-rose-500"></div>
-                        <div className="h-1/3 bg-amber-400"></div>
+                      <div className="h-1/3 bg-sky-400"></div>
+                      <div className="h-1/3 bg-rose-500"></div>
+                      <div className="h-1/3 bg-amber-400"></div>
                     </div>
                   </div>
                   <div className="text-[7px] mt-1 border-t border-white/20 pt-1 tracking-[0.2em] uppercase font-black text-blue-300">Pinturas y Decoración</div>
                 </div>
               </div>
             </div>
-            
+
             <div className={`text-center ${isUltraCompact ? 'mb-4' : 'mb-6'}`}>
-               <h1 className={`${styles.titleSize} font-black text-slate-800 tracking-[0.1em] uppercase border-b-2 border-slate-800 pb-1 inline-block`}>PRESUPUESTO</h1>
+              <h1 className={`${styles.titleSize} font-black text-slate-800 tracking-[0.1em] uppercase border-b-2 border-slate-800 pb-1 inline-block`}>PRESUPUESTO</h1>
             </div>
 
             {/* Recuadro de Cliente */}
@@ -256,12 +328,12 @@ const ResultView: React.FC<Props> = ({ data, onReset, autoDownload, onAutoDownlo
                   <div className={`w-1/2 ${styles.cellPadding} font-black bg-slate-50 text-[9px] uppercase`}>Base Imp.</div>
                   <div className={`w-1/2 ${styles.cellPadding} font-black text-right border-l-2 border-slate-900 ${isUltraCompact ? 'text-[11px]' : 'text-[13px]'}`}>{data.subtotal.toFixed(2)}€</div>
                 </div>
-                
+
                 <div className="flex border-2 border-slate-900 border-b-0">
                   <div className={`w-1/2 ${styles.cellPadding} font-black bg-slate-50 text-[9px] uppercase text-slate-500`}>IVA (21%)</div>
                   <div className={`w-1/2 ${styles.cellPadding} font-black text-right border-l-2 border-slate-900 ${isUltraCompact ? 'text-[11px]' : 'text-[13px]'} text-slate-500`}>{data.iva.toFixed(2)}€</div>
                 </div>
-                
+
                 <div className="flex border-2 border-slate-900 bg-slate-900 text-white shadow-xl">
                   <div className={`w-1/2 ${styles.cellPadding} font-black uppercase text-[10px] tracking-widest flex items-center`}>TOTAL</div>
                   <div className={`w-1/2 ${styles.cellPadding} font-black text-right border-l-2 border-white/20 ${isUltraCompact ? 'text-lg' : 'text-xl'}`}>{data.total.toFixed(2)}€</div>
