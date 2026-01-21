@@ -24,21 +24,21 @@ const OVERLAY = {
 };
 
 export async function generatePdf(
-  budget: BudgetData, 
-  config: InvoiceConfig, 
+  budget: BudgetData,
+  config: InvoiceConfig,
   invoiceCode: string
 ): Promise<string> {
   const PDFLib = (window as any).PDFLib;
   if (!PDFLib) throw new Error("PDF-Lib no cargada.");
-  
+
   const { PDFDocument, rgb, StandardFonts, degrees } = PDFLib;
 
   if (!budget.originalBuffer) throw new Error("No hay buffer original.");
 
-  const pdfDoc = await PDFDocument.load(new Uint8Array(budget.originalBuffer), { 
-    ignoreEncryption: true 
+  const pdfDoc = await PDFDocument.load(new Uint8Array(budget.originalBuffer), {
+    ignoreEncryption: true
   });
-  
+
   const pages = pdfDoc.getPages();
   const firstPage = pages[0];
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -122,41 +122,18 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4) BORRAR DESDE "NOTAS" HACIA ABAJO (sin tapar Base/IVA/Total)
-  // ✅ Ajuste: evitar que el tapado "muerda" el cuadro de totales.
-  // Usamos notesMarkerY si existe, si no una Y fija fiable.
-  const FIXED_NOTES_CUT_Y = 145;
-  const NOTES_COVER_MARGIN = 45;
+  // 4) NOTAS: TAPAR DESDE LA RAYA ENCIMA DE "NOTAS:" HACIA ABAJO
+  // ✅ Estrategia FIJA por plantilla (sin detectores) para NO cortar el bloque TOTAL.
+  // Ajusta SOLO este número si hiciera falta (pero debería ser estable en tu plantilla):
+  // - Si se corta algo del TOTAL -> BAJA este número (menos altura)
+  // - Si se sigue viendo "NOTAS" -> SUBE este número un poco
+  const NOTES_LINE_Y = 105; // <-- altura de la raya encima de NOTAS (plantilla)
 
-  const markerY =
-    (typeof budget.notesMarkerY === 'number' ? budget.notesMarkerY : undefined) ??
-    (typeof budget.footerMarkerY === 'number' ? budget.footerMarkerY : undefined);
-
-  let yStart = typeof markerY === 'number'
-    ? (markerY + NOTES_COVER_MARGIN)
-    : FIXED_NOTES_CUT_Y;
-
-  // 🔥 CAMBIO ÚNICO AQUÍ: margen de seguridad mayor para no tocar el bloque de totales
-  const TOTAL_SAFETY_MARGIN = 70; // antes 20
-
-  if (typeof budget.totalBlockMarkerY === 'number') {
-    const maxAllowed = budget.totalBlockMarkerY - TOTAL_SAFETY_MARGIN;
-    if (yStart > maxAllowed) yStart = maxAllowed;
-  }
-
-  if (typeof budget.ivaMarkerY === 'number') {
-    const maxAllowed = budget.ivaMarkerY - TOTAL_SAFETY_MARGIN;
-    if (yStart > maxAllowed) yStart = maxAllowed;
-  }
-
-  yStart = Math.max(0, Math.min(LAYOUT.height, yStart));
-
-  // Tapado final (DEBE ser lo último que se dibuja)
   firstPage.drawRectangle({
     x: 0,
     y: 0,
     width: LAYOUT.width,
-    height: yStart,
+    height: NOTES_LINE_Y,
     color: rgb(1, 1, 1),
     opacity: 1,
     borderOpacity: 0,
@@ -168,8 +145,8 @@ export async function generatePdf(
 }
 
 export async function generateDocx(
-  _budget: BudgetData, 
-  _config: InvoiceConfig, 
+  _budget: BudgetData,
+  _config: InvoiceConfig,
   _invoiceCode: string
 ) {
   alert("El modo Word no está disponible.");
