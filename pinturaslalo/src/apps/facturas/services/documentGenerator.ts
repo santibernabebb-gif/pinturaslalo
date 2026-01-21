@@ -44,21 +44,27 @@ export async function generatePdf(
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
   // 1) TAPAR SOLO el título "PRESUPUESTO" y escribir "FACTURA" en el mismo sitio.
-  //    (No tocamos cabecera)
+  //    (No tocamos cabecera ni el bloque gris de "para el cliente")
+
   const titleY = typeof budget.titleMarkerY === 'number' ? budget.titleMarkerY : undefined;
-  // Tapamos SOLO la zona del texto "PRESUPUESTO" (sin subir a cabecera).
-  // Y = baseline del texto en coordenadas PDF; bajamos el wipe para no tocar arriba.
-  const titleWipe = titleY !== undefined
-    ? (() => {
-        // Tapar "PRESUPUESTO" sin tocar la cabecera superior (logo/datos)
-        const HEADER_LIMIT = 720; // techo del rectángulo de borrado
-        const WIPE_H = 62;
-        let y = Math.max(0, titleY - 32);
-        // Si el rectángulo sube demasiado, lo bajamos
-        if (y + WIPE_H > HEADER_LIMIT) y = Math.max(0, HEADER_LIMIT - WIPE_H);
-        return { x: 0, y, w: 595, h: WIPE_H };
-      })()
-    : OVERLAY.fallback.titleWipe;
+
+  // 🔧 NUEVO: franja segura del título (entre cabecera y bloque gris)
+  // - No puede subir a la cabecera
+  // - No puede bajar al bloque gris "para el cliente"
+  const SAFE_TOP = 710;      // techo (no tocar datos/logo)
+  const SAFE_BOTTOM = 650;   // suelo (no tocar bloque gris)
+  const WIPE_H = 48;         // altura justa para "PRESUPUESTO" + su línea
+
+  const titleWipe = (() => {
+    // base: lo bajamos para incluir la línea inferior y no morder cabecera
+    let y = (titleY !== undefined) ? (titleY - 44) : 670;
+
+    // clamp dentro de la franja segura
+    if (y + WIPE_H > SAFE_TOP) y = SAFE_TOP - WIPE_H;
+    if (y < SAFE_BOTTOM) y = SAFE_BOTTOM;
+
+    return { x: 0, y, w: 595, h: WIPE_H };
+  })();
 
   firstPage.drawRectangle({
     x: titleWipe.x,
@@ -72,8 +78,9 @@ export async function generatePdf(
   const titleText = OVERLAY.texts.titulo.label;
   const titleSize = OVERLAY.texts.titulo.size;
   const titleWidth = fontBold.widthOfTextAtSize(titleText, titleSize);
-  // Dibujamos FACTURA un poco más abajo que el PRESUPUESTO original para que no tape cabecera
-  const drawTitleY = titleY !== undefined ? (titleY - 25) : (OVERLAY.fallback.titleWipe.y + 10);
+
+  // 🔧 NUEVO: dibujamos FACTURA dentro del rectángulo blanco (centrado verticalmente)
+  const drawTitleY = titleWipe.y + 10;
 
   firstPage.drawText(titleText, {
     x: (LAYOUT.width - titleWidth) / 2,
@@ -122,12 +129,8 @@ export async function generatePdf(
     color: rgb(0, 0, 0)
   });
 
-  // 4) NOTAS: TAPAR DESDE LA RAYA ENCIMA DE "NOTAS:" HACIA ABAJO
-  // ✅ Estrategia FIJA por plantilla (sin detectores) para NO cortar el bloque TOTAL.
-  // Ajusta SOLO este número si hiciera falta (pero debería ser estable en tu plantilla):
-  // - Si se corta algo del TOTAL -> BAJA este número (menos altura)
-  // - Si se sigue viendo "NOTAS" -> SUBE este número un poco
-  const NOTES_LINE_Y = 105; // <-- altura de la raya encima de NOTAS (plantilla)
+  // 4) BORRAR DESDE NOTAS HACIA ABAJO (ya lo tienes perfecto, NO tocar)
+  const NOTES_LINE_Y = 105;
 
   firstPage.drawRectangle({
     x: 0,
