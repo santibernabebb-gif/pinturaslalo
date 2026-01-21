@@ -23,9 +23,21 @@ const budgetSchema = {
 };
 
 export const extractBudgetData = async (base64Images: string[]): Promise<BudgetData> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.PDFSHIFT_API_KEY });
+  // ✅ EN VITE/FRONTEND: las variables deben venir de import.meta.env y empezar por VITE_
+  const apiKey =
+    (import.meta as any).env?.VITE_GEMINI_API_KEY ||
+    (import.meta as any).env?.VITE_PDFSHIFT_API_KEY ||
+    (import.meta as any).env?.VITE_API_KEY;
+
+  if (!apiKey) {
+    throw new Error(
+      "API key no configurada. Define VITE_GEMINI_API_KEY (recomendado) en Cloudflare Pages → Settings → Environment variables."
+    );
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   const model = 'gemini-3-flash-preview';
-  
+
   const prompt = `
     Analiza estas ${base64Images.length} imágenes que corresponden a un mismo presupuesto.
     REQUISITOS DE EXTRACCIÓN:
@@ -69,7 +81,7 @@ export const extractBudgetData = async (base64Images: string[]): Promise<BudgetD
     }
 
     const rawData = JSON.parse(cleanJson);
-    
+
     let subtotal = 0;
     const processedLines = rawData.lines
       .filter((l: any) => l.description && l.description.trim() !== "")
@@ -78,7 +90,7 @@ export const extractBudgetData = async (base64Images: string[]): Promise<BudgetD
         const unitPrice = parseFloat(line.unitPrice) || 0;
         const totalPrice = units * unitPrice;
         subtotal += totalPrice;
-        
+
         return {
           description: line.description.toUpperCase(),
           units: units > 0 ? units : undefined,
